@@ -7,6 +7,12 @@ build/
 *.html
 *.data
 
+# Exception: Allow docs folder for GitHub Pages
+!docs/
+!docs/*.html
+!docs/*.js
+!docs/*.wasm
+
 # IDE files
 .vscode/
 .idea/

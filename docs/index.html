@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSRLWeb - MiniScript + Raylib</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+        }
+        .description {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .links {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .link-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .link-button:hover {
+            background-color: #2980b9;
+        }
+        .link-button.demo {
+            background-color: #27ae60;
+        }
+        .link-button.demo:hover {
+            background-color: #229954;
+        }
+        code {
+            background-color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>MSRLWeb</h1>
+    <div class="subtitle">MiniScript + Raylib for the Web</div>
+
+    <div class="description">
+        <p>A web-based demonstration combining <strong>MiniScript</strong> scripting with <strong>Raylib</strong> graphics, compiled to WebAssembly using Emscripten.</p>
+
+        <p>This project showcases a MiniScript-driven application where your game/app logic is written in MiniScript and loaded at runtime. The script has full access to Raylib functions for graphics, input, timing, and more.</p>
+
+        <p>Edit <code>assets/main.ms</code> and refresh the browser to see your changes instantly—no recompilation needed!</p>
+    </div>
+
+    <div class="links">
+        <a href="msrlweb.html" class="link-button demo">Launch Demo</a>
+        <a href="https://github.com/JoeStrout/MSRLWeb" class="link-button" target="_blank">View on GitHub</a>
+    </div>
+</body>
+</html>
