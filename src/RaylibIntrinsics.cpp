@@ -1328,7 +1328,7 @@ static void AddConstants(ValueDict raylibModule) {
 // Add intrinsics to interpreter
 //--------------------------------------------------------------------------------
 
-void AddRaylibIntrinsics(Interpreter* interpreter) {
+void AddRaylibIntrinsics() {
 	Intrinsic *f;
 
 	// Create accessors for the classes

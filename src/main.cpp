@@ -18,7 +18,6 @@ using namespace MiniScript;
 //--------------------------------------------------------------------------------
 
 static Interpreter* interpreter = nullptr;
-static std::string outputBuffer;
 static bool scriptLoaded = false;
 static bool scriptRunning = false;
 static bool scriptStarted = false;
@@ -30,16 +29,12 @@ static String loadError;
 //--------------------------------------------------------------------------------
 
 static void Print(String s, bool lineBreak = true) {
-	outputBuffer += s.c_str();
-	if (lineBreak) outputBuffer += "\n";
 	printf("%s%s", s.c_str(), lineBreak ? "\n" : "");
 }
 
 static void PrintErr(String s, bool lineBreak = true) {
-	outputBuffer += "ERROR: ";
-	outputBuffer += s.c_str();
-	if (lineBreak) outputBuffer += "\n";
-	fprintf(stderr, "%s%s", s.c_str(), lineBreak ? "\n" : "");
+	//fprintf(stderr, "%s%s", s.c_str(), lineBreak ? "\n" : "");
+	printf("%s%s", s.c_str(), lineBreak ? "\n" : "");
 }
 
 //--------------------------------------------------------------------------------
@@ -95,7 +90,7 @@ void InitMiniScript() {
 	interpreter->implicitOutput = &Print;
 
 	// Add Raylib intrinsics
-	AddRaylibIntrinsics(interpreter);
+	AddRaylibIntrinsics();
 
 	printf("MiniScript interpreter initialized with Raylib intrinsics\n");
 }

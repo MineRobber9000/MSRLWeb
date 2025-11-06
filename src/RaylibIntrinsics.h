@@ -12,7 +12,7 @@ namespace MiniScript {
 	class Interpreter;
 }
 
-// Add Raylib intrinsics to the given MiniScript interpreter
-void AddRaylibIntrinsics(MiniScript::Interpreter* interpreter);
+// Add Raylib intrinsics to the global state
+void AddRaylibIntrinsics();
 
 #endif // RAYLIBINTRINSICS_H

@@ -3,10 +3,6 @@
 
 print "main.ms running!"
 
-img = raylib.GenImageGradientLinear(128, 128, 0, raylib.YELLOW, raylib.RED)
-gradientTex = raylib.LoadTextureFromImage(img)
-raylib.UnloadImage img
-
 wumpusTex = raylib.LoadTexture("assets/Wumpus.png")
 
 rgb = function(r=0, g=0, b=0, a=255)
@@ -15,10 +11,7 @@ end function
 
 drawBackground = function
 	// Sunset sky gradient
-	raylib.DrawRectangle 0, 0, 960, 200, raylib.SKYBLUE
-	raylib.DrawRectangle 0, 200, 960, 150, rgb(255, 180, 100, 255)
-	raylib.DrawRectangle 0, 350, 960, 150, rgb(255, 120, 80, 255)
-	raylib.DrawRectangle 0, 500, 960, 140, rgb(100, 50, 120, 255)
+	raylib.DrawRectangleGradientV 0, 0, 960, 640, rgb(200, 200, 255), rgb(150, 0, 0)
 
 	// Sun
 	raylib.DrawCircle 800, 300, 60, rgb(255, 200, 0, 255)
@@ -26,8 +19,8 @@ drawBackground = function
 
 	// Mountains (note: we have one clockwise and one anti-clockwise
 	// here, just to prove that in MSRL, it works both ways!)
-	raylib.DrawTriangle [100, 640], [500, 640], [300, 400], rgb(60, 40, 80, 255)
-	raylib.DrawTriangle [400, 640], [600, 350], [800, 640], rgb(80, 50, 100, 255)
+	raylib.DrawTriangle [50, 640], [500, 640], [300, 400], rgb(60, 40, 80, 255)
+	raylib.DrawTriangle [400, 640], [600, 350], [900, 640], rgb(80, 50, 100, 255)
 end function
 
 
@@ -39,7 +32,6 @@ while true
 	raylib.BeginDrawing
 	
 	drawBackground
-	raylib.DrawTexture gradientTex, x, y, raylib.WHITE
 	raylib.DrawTexture wumpusTex, x, y, raylib.WHITE
 
 	if raylib.IsKeyDown(raylib.KEY_LEFT) then x -= dx

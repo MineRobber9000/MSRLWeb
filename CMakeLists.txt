@@ -54,6 +54,7 @@ set(EMSCRIPTEN_COMPILE_FLAGS
     -Os                                    # Optimize for size
     -Wall                                  # All warnings
     -DPLATFORM_WEB                        # Platform definition
+    -fexceptions                           # Enable C++ exceptions
 )
 
 # Emscripten link flags (used during linking only)
@@ -64,6 +65,7 @@ set(EMSCRIPTEN_LINK_FLAGS
     -sALLOW_MEMORY_GROWTH=1               # Allow dynamic memory growth
     -sTOTAL_MEMORY=67108864               # Initial memory (64MB)
     -sSTACK_SIZE=5242880                  # Stack size (5MB)
+    -fexceptions                          # Enable C++ exceptions
 )
 
 # Apply flags to target
