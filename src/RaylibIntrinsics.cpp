@@ -88,6 +88,48 @@ static ValueDict FontClass() {
 	return map;
 }
 
+static ValueDict WaveClass() {
+	static ValueDict map;
+	if (map.Count() == 0) {
+		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("frameCount"), Value::zero);
+		map.SetValue(String("sampleRate"), Value::zero);
+		map.SetValue(String("sampleSize"), Value::zero);
+		map.SetValue(String("channels"), Value::zero);
+	}
+	return map;
+}
+
+static ValueDict MusicClass() {
+	static ValueDict map;
+	if (map.Count() == 0) {
+		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("frameCount"), Value::zero);
+		map.SetValue(String("looping"), Value::zero);
+	}
+	return map;
+}
+
+static ValueDict SoundClass() {
+	static ValueDict map;
+	if (map.Count() == 0) {
+		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("frameCount"), Value::zero);
+	}
+	return map;
+}
+
+static ValueDict AudioStreamClass() {
+	static ValueDict map;
+	if (map.Count() == 0) {
+		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("sampleRate"), Value::zero);
+		map.SetValue(String("sampleSize"), Value::zero);
+		map.SetValue(String("channels"), Value::zero);
+	}
+	return map;
+}
+
 //--------------------------------------------------------------------------------
 // Helper functions
 //--------------------------------------------------------------------------------
@@ -182,6 +224,108 @@ static Font ValueToFont(Value value) {
 		return GetFontDefault();
 	}
 	return *fontPtr;
+}
+
+// Convert a Raylib Wave to a MiniScript map
+static Value WaveToValue(Wave wave) {
+	Wave* wavePtr = new Wave(wave);
+	ValueDict map;
+	map.SetValue(Value::magicIsA, WaveClass());
+	map.SetValue(String("_handle"), Value((long)wavePtr));
+	map.SetValue(String("frameCount"), Value((int)wave.frameCount));
+	map.SetValue(String("sampleRate"), Value((int)wave.sampleRate));
+	map.SetValue(String("sampleSize"), Value((int)wave.sampleSize));
+	map.SetValue(String("channels"), Value((int)wave.channels));
+	return Value(map);
+}
+
+// Extract a Raylib Wave from a MiniScript map
+static Wave ValueToWave(Value value) {
+	if (value.type != ValueType::Map) {
+		return Wave{NULL, 0, 0, 0, 0};
+	}
+	ValueDict map = value.GetDict();
+	Value handleVal = map.Lookup(String("_handle"), Value::zero);
+	Wave* wavePtr = (Wave*)(long)handleVal.IntValue();
+	if (wavePtr == nullptr) {
+		return Wave{NULL, 0, 0, 0, 0};
+	}
+	return *wavePtr;
+}
+
+// Convert a Raylib Music to a MiniScript map
+static Value MusicToValue(Music music) {
+	Music* musicPtr = new Music(music);
+	ValueDict map;
+	map.SetValue(Value::magicIsA, MusicClass());
+	map.SetValue(String("_handle"), Value((long)musicPtr));
+	map.SetValue(String("frameCount"), Value((int)music.frameCount));
+	map.SetValue(String("looping"), Value(music.looping ? 1 : 0));
+	return Value(map);
+}
+
+// Extract a Raylib Music from a MiniScript map
+static Music ValueToMusic(Value value) {
+	if (value.type != ValueType::Map) {
+		return Music{};
+	}
+	ValueDict map = value.GetDict();
+	Value handleVal = map.Lookup(String("_handle"), Value::zero);
+	Music* musicPtr = (Music*)(long)handleVal.IntValue();
+	if (musicPtr == nullptr) {
+		return Music{};
+	}
+	return *musicPtr;
+}
+
+// Convert a Raylib Sound to a MiniScript map
+static Value SoundToValue(Sound sound) {
+	Sound* soundPtr = new Sound(sound);
+	ValueDict map;
+	map.SetValue(Value::magicIsA, SoundClass());
+	map.SetValue(String("_handle"), Value((long)soundPtr));
+	map.SetValue(String("frameCount"), Value((int)sound.frameCount));
+	return Value(map);
+}
+
+// Extract a Raylib Sound from a MiniScript map
+static Sound ValueToSound(Value value) {
+	if (value.type != ValueType::Map) {
+		return Sound{};
+	}
+	ValueDict map = value.GetDict();
+	Value handleVal = map.Lookup(String("_handle"), Value::zero);
+	Sound* soundPtr = (Sound*)(long)handleVal.IntValue();
+	if (soundPtr == nullptr) {
+		return Sound{};
+	}
+	return *soundPtr;
+}
+
+// Convert a Raylib AudioStream to a MiniScript map
+static Value AudioStreamToValue(AudioStream stream) {
+	AudioStream* streamPtr = new AudioStream(stream);
+	ValueDict map;
+	map.SetValue(Value::magicIsA, AudioStreamClass());
+	map.SetValue(String("_handle"), Value((long)streamPtr));
+	map.SetValue(String("sampleRate"), Value((int)stream.sampleRate));
+	map.SetValue(String("sampleSize"), Value((int)stream.sampleSize));
+	map.SetValue(String("channels"), Value((int)stream.channels));
+	return Value(map);
+}
+
+// Extract a Raylib AudioStream from a MiniScript map
+static AudioStream ValueToAudioStream(Value value) {
+	if (value.type != ValueType::Map) {
+		return AudioStream{};
+	}
+	ValueDict map = value.GetDict();
+	Value handleVal = map.Lookup(String("_handle"), Value::zero);
+	AudioStream* streamPtr = (AudioStream*)(long)handleVal.IntValue();
+	if (streamPtr == nullptr) {
+		return AudioStream{};
+	}
+	return *streamPtr;
 }
 
 // Convert a MiniScript map to a Raylib Color
@@ -1335,6 +1479,729 @@ static void AddRTextMethods(ValueDict raylibModule) {
 }
 
 //--------------------------------------------------------------------------------
+// raudio methods
+//--------------------------------------------------------------------------------
+
+static void AddRAudioMethods(ValueDict raylibModule) {
+	Intrinsic *i;
+
+	// Audio device management
+
+	i = Intrinsic::Create("");
+	i->code = INTRINSIC_LAMBDA {
+		InitAudioDevice();
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("InitAudioDevice", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->code = INTRINSIC_LAMBDA {
+		CloseAudioDevice();
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("CloseAudioDevice", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->code = INTRINSIC_LAMBDA {
+		return IntrinsicResult(IsAudioDeviceReady());
+	};
+	raylibModule.SetValue("IsAudioDeviceReady", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("volume", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		float volume = context->GetVar(String("volume")).FloatValue();
+		SetMasterVolume(volume);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetMasterVolume", i->GetFunc());
+
+	// Wave loading
+
+	i = Intrinsic::Create("");
+	i->AddParam("fileName");
+	i->code = INTRINSIC_LAMBDA {
+		if (partialResult.Done()) {
+			// First call - start the async fetch
+			String path = context->GetVar(String("fileName")).ToString();
+
+			// Create a new fetch ID and entry
+			long fetchId = nextFetchId++;
+			FetchData& data = activeFetches[fetchId];
+
+			emscripten_fetch_attr_t attr;
+			emscripten_fetch_attr_init(&attr);
+			strcpy(attr.requestMethod, "GET");
+			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
+			attr.onsuccess = fetch_completed;
+			attr.onerror = fetch_completed;
+
+			data.fetch = emscripten_fetch(&attr, path.c_str());
+			printf("LoadWave: Started fetch ID %ld for %s\n", fetchId, path.c_str());
+
+			// Return the fetch ID as partial result
+			return IntrinsicResult(Value((double)fetchId), false);
+		} else {
+			// Subsequent calls - check if fetch is complete
+			long fetchId = (long)partialResult.Result().DoubleValue();
+			auto it = activeFetches.find(fetchId);
+			if (it == activeFetches.end()) {
+				printf("LoadWave: Fetch ID %ld not found!\n", fetchId);
+				return IntrinsicResult::Null;
+			}
+
+			FetchData& data = it->second;
+
+			if (!data.completed) {
+				// Still loading
+				return partialResult;
+			}
+
+			// Fetch is complete
+			emscripten_fetch_t* fetch = data.fetch;
+			printf("LoadWave: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
+
+			if (data.status == 200) {
+				// Success - get file extension and load wave from memory
+				const char* url = fetch->url;
+				const char* ext = strrchr(url, '.');
+				if (ext == nullptr) ext = ".wav";
+
+				Wave wave = LoadWaveFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult(WaveToValue(wave));
+			} else {
+				// Error
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult::Null;
+			}
+		}
+	};
+	raylibModule.SetValue("LoadWave", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("fileType");
+	i->AddParam("fileData");
+	i->AddParam("dataSize");
+	i->code = INTRINSIC_LAMBDA {
+		String fileType = context->GetVar(String("fileType")).ToString();
+		// Note: This would need a byte array type in MiniScript to be fully useful
+		// For now, we'll skip implementing this
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("LoadWaveFromMemory", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		// IsWaveReady doesn't exist in Raylib, check if data pointer is valid
+		bool isReady = (wave.data != NULL && wave.frameCount > 0);
+		return IntrinsicResult(isReady);
+	};
+	raylibModule.SetValue("IsWaveReady", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		UnloadWave(wave);
+		// Also delete the heap-allocated Wave
+		ValueDict map = context->GetVar(String("wave")).GetDict();
+		Value handleVal = map.Lookup(String("_handle"), Value::zero);
+		Wave* wavePtr = (Wave*)(long)handleVal.IntValue();
+		if (wavePtr != nullptr) {
+			delete wavePtr;
+		}
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadWave", i->GetFunc());
+
+	// Wave manipulation
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		Wave copy = WaveCopy(wave);
+		return IntrinsicResult(WaveToValue(copy));
+	};
+	raylibModule.SetValue("WaveCopy", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->AddParam("initFrame", Value::zero);
+	i->AddParam("finalFrame", Value(100));
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		int initFrame = context->GetVar(String("initFrame")).IntValue();
+		int finalFrame = context->GetVar(String("finalFrame")).IntValue();
+		WaveCrop(&wave, initFrame, finalFrame);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("WaveCrop", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->AddParam("sampleRate", Value(44100));
+	i->AddParam("sampleSize", Value(16));
+	i->AddParam("channels", Value(2));
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		int sampleRate = context->GetVar(String("sampleRate")).IntValue();
+		int sampleSize = context->GetVar(String("sampleSize")).IntValue();
+		int channels = context->GetVar(String("channels")).IntValue();
+		WaveFormat(&wave, sampleRate, sampleSize, channels);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("WaveFormat", i->GetFunc());
+
+	// Music loading and control
+
+	i = Intrinsic::Create("");
+	i->AddParam("fileName");
+	i->code = INTRINSIC_LAMBDA {
+		if (partialResult.Done()) {
+			// First call - start the async fetch
+			String path = context->GetVar(String("fileName")).ToString();
+
+			// Create a new fetch ID and entry
+			long fetchId = nextFetchId++;
+			FetchData& data = activeFetches[fetchId];
+
+			emscripten_fetch_attr_t attr;
+			emscripten_fetch_attr_init(&attr);
+			strcpy(attr.requestMethod, "GET");
+			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
+			attr.onsuccess = fetch_completed;
+			attr.onerror = fetch_completed;
+
+			data.fetch = emscripten_fetch(&attr, path.c_str());
+			printf("LoadMusicStream: Started fetch ID %ld for %s\n", fetchId, path.c_str());
+
+			// Return the fetch ID as partial result
+			return IntrinsicResult(Value((double)fetchId), false);
+		} else {
+			// Subsequent calls - check if fetch is complete
+			long fetchId = (long)partialResult.Result().DoubleValue();
+			auto it = activeFetches.find(fetchId);
+			if (it == activeFetches.end()) {
+				printf("LoadMusicStream: Fetch ID %ld not found!\n", fetchId);
+				return IntrinsicResult::Null;
+			}
+
+			FetchData& data = it->second;
+
+			if (!data.completed) {
+				// Still loading
+				return partialResult;
+			}
+
+			// Fetch is complete
+			emscripten_fetch_t* fetch = data.fetch;
+			printf("LoadMusicStream: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
+
+			if (data.status == 200) {
+				// Success - get file extension and load music from memory
+				const char* url = fetch->url;
+				const char* ext = strrchr(url, '.');
+				if (ext == nullptr) ext = ".ogg";
+
+				Music music = LoadMusicStreamFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult(MusicToValue(music));
+			} else {
+				// Error
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult::Null;
+			}
+		}
+	};
+	raylibModule.SetValue("LoadMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("fileType");
+	i->AddParam("data");
+	i->AddParam("dataSize");
+	i->code = INTRINSIC_LAMBDA {
+		String fileType = context->GetVar(String("fileType")).ToString();
+		// Note: This would need a byte array type in MiniScript to be fully useful
+		// For now, we'll skip implementing this
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("LoadMusicStreamFromMemory", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		// IsMusicReady doesn't exist in Raylib, check if frameCount is valid
+		bool isReady = (music.frameCount > 0);
+		return IntrinsicResult(isReady);
+	};
+	raylibModule.SetValue("IsMusicReady", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		UnloadMusicStream(music);
+		// Also delete the heap-allocated Music
+		ValueDict map = context->GetVar(String("music")).GetDict();
+		Value handleVal = map.Lookup(String("_handle"), Value::zero);
+		Music* musicPtr = (Music*)(long)handleVal.IntValue();
+		if (musicPtr != nullptr) {
+			delete musicPtr;
+		}
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		PlayMusicStream(music);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("PlayMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		return IntrinsicResult(IsMusicStreamPlaying(music));
+	};
+	raylibModule.SetValue("IsMusicStreamPlaying", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		UpdateMusicStream(music);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UpdateMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		StopMusicStream(music);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("StopMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		PauseMusicStream(music);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("PauseMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		ResumeMusicStream(music);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("ResumeMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->AddParam("position", Value::zero);
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		float position = context->GetVar(String("position")).FloatValue();
+		SeekMusicStream(music, position);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SeekMusicStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->AddParam("volume", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		float volume = context->GetVar(String("volume")).FloatValue();
+		SetMusicVolume(music, volume);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetMusicVolume", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->AddParam("pitch", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		float pitch = context->GetVar(String("pitch")).FloatValue();
+		SetMusicPitch(music, pitch);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetMusicPitch", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->AddParam("pan", Value(0.5));
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		float pan = context->GetVar(String("pan")).FloatValue();
+		SetMusicPan(music, pan);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetMusicPan", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		float length = GetMusicTimeLength(music);
+		return IntrinsicResult(Value(length));
+	};
+	raylibModule.SetValue("GetMusicTimeLength", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("music");
+	i->code = INTRINSIC_LAMBDA {
+		Music music = ValueToMusic(context->GetVar(String("music")));
+		float timePlayed = GetMusicTimePlayed(music);
+		return IntrinsicResult(Value(timePlayed));
+	};
+	raylibModule.SetValue("GetMusicTimePlayed", i->GetFunc());
+
+	// Sound loading and control
+
+	i = Intrinsic::Create("");
+	i->AddParam("fileName");
+	i->code = INTRINSIC_LAMBDA {
+		if (partialResult.Done()) {
+			// First call - start the async fetch
+			String path = context->GetVar(String("fileName")).ToString();
+
+			// Create a new fetch ID and entry
+			long fetchId = nextFetchId++;
+			FetchData& data = activeFetches[fetchId];
+
+			emscripten_fetch_attr_t attr;
+			emscripten_fetch_attr_init(&attr);
+			strcpy(attr.requestMethod, "GET");
+			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
+			attr.onsuccess = fetch_completed;
+			attr.onerror = fetch_completed;
+
+			data.fetch = emscripten_fetch(&attr, path.c_str());
+			printf("LoadSound: Started fetch ID %ld for %s\n", fetchId, path.c_str());
+
+			// Return the fetch ID as partial result
+			return IntrinsicResult(Value((double)fetchId), false);
+		} else {
+			// Subsequent calls - check if fetch is complete
+			long fetchId = (long)partialResult.Result().DoubleValue();
+			auto it = activeFetches.find(fetchId);
+			if (it == activeFetches.end()) {
+				printf("LoadSound: Fetch ID %ld not found!\n", fetchId);
+				return IntrinsicResult::Null;
+			}
+
+			FetchData& data = it->second;
+
+			if (!data.completed) {
+				// Still loading
+				return partialResult;
+			}
+
+			// Fetch is complete
+			emscripten_fetch_t* fetch = data.fetch;
+			printf("LoadSound: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
+
+			if (data.status == 200) {
+				// Success - first load wave, then convert to sound
+				const char* url = fetch->url;
+				const char* ext = strrchr(url, '.');
+				if (ext == nullptr) ext = ".wav";
+
+				Wave wave = LoadWaveFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
+				Sound sound = LoadSoundFromWave(wave);
+				UnloadWave(wave);  // Clean up the wave
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult(SoundToValue(sound));
+			} else {
+				// Error
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult::Null;
+			}
+		}
+	};
+	raylibModule.SetValue("LoadSound", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		Sound sound = LoadSoundFromWave(wave);
+		return IntrinsicResult(SoundToValue(sound));
+	};
+	raylibModule.SetValue("LoadSoundFromWave", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("source");
+	i->code = INTRINSIC_LAMBDA {
+		Sound source = ValueToSound(context->GetVar(String("source")));
+		Sound alias = LoadSoundAlias(source);
+		return IntrinsicResult(SoundToValue(alias));
+	};
+	raylibModule.SetValue("LoadSoundAlias", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		// IsSoundReady doesn't exist in Raylib, check if frameCount is valid
+		bool isReady = (sound.frameCount > 0);
+		return IntrinsicResult(isReady);
+	};
+	raylibModule.SetValue("IsSoundReady", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		UnloadSound(sound);
+		// Also delete the heap-allocated Sound
+		ValueDict map = context->GetVar(String("sound")).GetDict();
+		Value handleVal = map.Lookup(String("_handle"), Value::zero);
+		Sound* soundPtr = (Sound*)(long)handleVal.IntValue();
+		if (soundPtr != nullptr) {
+			delete soundPtr;
+		}
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadSound", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("alias");
+	i->code = INTRINSIC_LAMBDA {
+		Sound alias = ValueToSound(context->GetVar(String("alias")));
+		UnloadSoundAlias(alias);
+		// Also delete the heap-allocated Sound
+		ValueDict map = context->GetVar(String("alias")).GetDict();
+		Value handleVal = map.Lookup(String("_handle"), Value::zero);
+		Sound* soundPtr = (Sound*)(long)handleVal.IntValue();
+		if (soundPtr != nullptr) {
+			delete soundPtr;
+		}
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadSoundAlias", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		PlaySound(sound);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("PlaySound", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		StopSound(sound);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("StopSound", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		PauseSound(sound);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("PauseSound", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		ResumeSound(sound);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("ResumeSound", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		return IntrinsicResult(IsSoundPlaying(sound));
+	};
+	raylibModule.SetValue("IsSoundPlaying", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->AddParam("volume", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		float volume = context->GetVar(String("volume")).FloatValue();
+		SetSoundVolume(sound, volume);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetSoundVolume", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->AddParam("pitch", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		float pitch = context->GetVar(String("pitch")).FloatValue();
+		SetSoundPitch(sound, pitch);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetSoundPitch", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->AddParam("pan", Value(0.5));
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		float pan = context->GetVar(String("pan")).FloatValue();
+		SetSoundPan(sound, pan);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetSoundPan", i->GetFunc());
+
+	// AudioStream management
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		return IntrinsicResult(IsAudioStreamValid(stream));
+	};
+	raylibModule.SetValue("IsAudioStreamReady", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		UnloadAudioStream(stream);
+		// Also delete the heap-allocated AudioStream
+		ValueDict map = context->GetVar(String("stream")).GetDict();
+		Value handleVal = map.Lookup(String("_handle"), Value::zero);
+		AudioStream* streamPtr = (AudioStream*)(long)handleVal.IntValue();
+		if (streamPtr != nullptr) {
+			delete streamPtr;
+		}
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		return IntrinsicResult(IsAudioStreamProcessed(stream));
+	};
+	raylibModule.SetValue("IsAudioStreamProcessed", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		PlayAudioStream(stream);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("PlayAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		PauseAudioStream(stream);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("PauseAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		ResumeAudioStream(stream);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("ResumeAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		return IntrinsicResult(IsAudioStreamPlaying(stream));
+	};
+	raylibModule.SetValue("IsAudioStreamPlaying", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		StopAudioStream(stream);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("StopAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->AddParam("volume", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		float volume = context->GetVar(String("volume")).FloatValue();
+		SetAudioStreamVolume(stream, volume);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetAudioStreamVolume", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->AddParam("pitch", Value(1.0));
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		float pitch = context->GetVar(String("pitch")).FloatValue();
+		SetAudioStreamPitch(stream, pitch);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetAudioStreamPitch", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->AddParam("pan", Value(0.5));
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		float pan = context->GetVar(String("pan")).FloatValue();
+		SetAudioStreamPan(stream, pan);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetAudioStreamPan", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("size", Value(4096));
+	i->code = INTRINSIC_LAMBDA {
+		int size = context->GetVar(String("size")).IntValue();
+		SetAudioStreamBufferSizeDefault(size);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetAudioStreamBufferSizeDefault", i->GetFunc());
+}
+
+//--------------------------------------------------------------------------------
 // rshapes methods
 //--------------------------------------------------------------------------------
 
@@ -2212,6 +3079,18 @@ void AddRaylibIntrinsics() {
 	f = Intrinsic::Create("Font");
 	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(FontClass()); };
 
+	f = Intrinsic::Create("Wave");
+	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(WaveClass()); };
+
+	f = Intrinsic::Create("Music");
+	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(MusicClass()); };
+
+	f = Intrinsic::Create("Sound");
+	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(SoundClass()); };
+
+	f = Intrinsic::Create("AudioStream");
+	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(AudioStreamClass()); };
+
 	// Create and register the main raylib module
 	f = Intrinsic::Create("raylib");
 	f->code = INTRINSIC_LAMBDA {
@@ -2222,6 +3101,7 @@ void AddRaylibIntrinsics() {
 			AddRShapesMethods(raylibModule);
 			AddRTexturesMethods(raylibModule);
 			AddRTextMethods(raylibModule);
+			AddRAudioMethods(raylibModule);
 			AddConstants(raylibModule);
 		}
 

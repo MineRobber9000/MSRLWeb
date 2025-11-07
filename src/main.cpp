@@ -214,12 +214,13 @@ int main() {
 
 	InitWindow(screenWidth, screenHeight, "MSRLWeb - MiniScript + Raylib");
 	SetTargetFPS(60);
+	InitAudioDevice();
 
 	// Set default font to use point filtering for pixel-perfect rendering
-	Font defaultFont = GetFontDefault();
-	SetTextureFilter(defaultFont.texture, TEXTURE_FILTER_POINT);
-	printf("Default font base size: %d\n", defaultFont.baseSize);
-	printf("For pixel-perfect text, use font sizes that are multiples of %d\n", defaultFont.baseSize);
+// 	Font defaultFont = GetFontDefault();
+// 	SetTextureFilter(defaultFont.texture, TEXTURE_FILTER_POINT);
+// 	printf("Default font base size: %d\n", defaultFont.baseSize);
+// 	printf("For pixel-perfect text, use font sizes that are multiples of %d\n", defaultFont.baseSize);
 
 	// Initialize MiniScript
 	InitMiniScript();

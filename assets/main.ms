@@ -4,6 +4,7 @@
 print "main.ms running!"
 
 wumpusTex = raylib.LoadTexture("assets/Wumpus.png")
+woobleSnd = raylib.LoadSound("assets/wooble.wav")
 
 rgb = function(r=0, g=0, b=0, a=255)
 	return {"r":r, "g":g, "b":b, "a":a}
@@ -44,11 +45,16 @@ while true
 		print "Clicked at " + pos.x + ", " + pos.y
 		x = pos.x
 		y = pos.y
+		raylib.SetSoundPitch woobleSnd, 1 - (pos.y - 320) / 640
+		raylib.SetSoundPan woobleSnd, 1 - pos.x / 960  // NOTE: 0=right, 1=left
+		raylib.PlaySound woobleSnd
 	end if
 	
+	raylib.DrawFPS
 	raylib.EndDrawing
 	yield
 end while
 
 // clean up (not that we ever get here...)
 raylib.UnloadTexture tex
+raylib.UnloadSound woobleSnd
