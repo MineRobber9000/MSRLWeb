@@ -37,7 +37,7 @@ Your game logic lives in **easy-to-edit MiniScript files**. Change the code, ref
 
 ## 🚀 Quick Example
 
-Here's a complete bouncing sprite in MiniScript:
+Here's a complete bouncing sprite demo in MiniScript:
 
 ```miniscript
 // Load a sprite
@@ -52,11 +52,8 @@ while true
     raylib.BeginDrawing
     raylib.ClearBackground raylib.RAYWHITE
 
-    // Move the ball
-    x += dx
-    y += dy
-
-    // Bounce off edges
+    // Move the sprite, bouncing off edges
+    x += dx; y += dy
     if x > 960 - 64 or x < 0 then dx = -dx
     if y > 640 - 64 or y < 0 then dy = -dy
 
