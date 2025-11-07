@@ -91,6 +91,14 @@ add_custom_command(TARGET msrlweb POST_BUILD
     COMMENT "Copying assets to build directory"
 )
 
+# Copy index.html to build directory
+add_custom_command(TARGET msrlweb POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/index.html
+    ${CMAKE_BINARY_DIR}/index.html
+    COMMENT "Copying index.html to build directory"
+)
+
 # Install target (optional)
 install(TARGETS msrlweb DESTINATION ${CMAKE_SOURCE_DIR}/build)
 

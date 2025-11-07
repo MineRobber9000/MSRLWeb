@@ -1,11 +1,13 @@
 # Build outputs
 build/
+dist/
 *.o
 *.a
 *.wasm
 *.js
 *.html
 *.data
+*.zip
 
 # Exception: Allow docs folder for GitHub Pages
 !docs/

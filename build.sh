@@ -90,7 +90,7 @@ if [ $? -eq 0 ]; then
     ls -lh msrlweb.html msrlweb.js msrlweb.wasm 2>/dev/null || echo "  (output files)"
     echo ""
     echo "To run: cd build && python3 -m http.server 8000"
-    echo "Then open: http://localhost:8000/msrlweb.html"
+    echo "Then open: http://localhost:8000"
 else
     echo -e "${RED}Build failed!${NC}"
     exit 1
