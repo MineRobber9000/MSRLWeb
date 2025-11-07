@@ -9,7 +9,6 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/fetch.h>
 #include <stdio.h>
-#include <string>
 
 using namespace MiniScript;
 
@@ -17,12 +16,19 @@ using namespace MiniScript;
 // Global state
 //--------------------------------------------------------------------------------
 
+enum ScriptState {
+	LOADING,
+	RUNNING,
+	ERRORED,
+	COMPLETE
+};
+
 static Interpreter* interpreter = nullptr;
-static bool scriptLoaded = false;
-static bool scriptRunning = false;
-static bool scriptStarted = false;
+static ScriptState scriptState = LOADING;
 static String scriptSource;
 static String loadError;
+static String runtimeError;
+static ValueList stackTrace;
 
 //--------------------------------------------------------------------------------
 // Output callbacks for MiniScript
@@ -34,6 +40,9 @@ static void Print(String s, bool lineBreak = true) {
 
 static void PrintErr(String s, bool lineBreak = true) {
 	//fprintf(stderr, "%s%s", s.c_str(), lineBreak ? "\n" : "");
+	runtimeError = s;
+	scriptState = ERRORED;
+	stackTrace = Intrinsics::StackList(interpreter->vm);
 	printf("%s%s", s.c_str(), lineBreak ? "\n" : "");
 }
 
@@ -52,14 +61,16 @@ void onScriptFetched(emscripten_fetch_t *fetch) {
 			scriptData[fetch->numBytes] = '\0';
 			scriptSource = String(scriptData);
 			free(scriptData);
-			scriptLoaded = true;
 			printf("Successfully loaded script from %s\n", fetch->url);
+			// State remains LOADING until RunScript is called
 		} else {
 			loadError = "Memory allocation failed";
+			scriptState = ERRORED;
 			printf("Failed to allocate memory for script\n");
 		}
 	} else {
 		loadError = String("HTTP error: ") + String::Format(fetch->status);
+		scriptState = ERRORED;
 		printf("Failed to download %s: HTTP %d\n", fetch->url, fetch->status);
 	}
 
@@ -110,7 +121,7 @@ void RunScript() {
 	interpreter->Compile();
 
 	printf("Starting script execution...\n");
-	scriptRunning = true;
+	scriptState = RUNNING;
 
 	// Don't run the script here - let the main loop handle incremental execution
 }
@@ -121,12 +132,11 @@ void RunScript() {
 
 void MainLoop() {
 	// Start the script when it's loaded but not yet started
-	if (scriptLoaded && !scriptStarted) {
+	if (scriptState == LOADING && !scriptSource.empty()) {
 		RunScript();
-		scriptStarted = true;
 	}
 
-	if (scriptRunning) {
+	if (scriptState == RUNNING) {
 		// Script is running - hand control to MiniScript
 		// MiniScript will handle BeginDrawing/EndDrawing and everything else
 		if (!interpreter->Done()) {
@@ -135,38 +145,47 @@ void MainLoop() {
 			} catch (MiniscriptException& mse) {
 				PrintErr("Runtime Exception: " + mse.message);
 				interpreter->vm->Stop();
-				scriptRunning = false;
+				scriptState = ERRORED;
 			}
-
-			if (interpreter->Done()) {
-				scriptRunning = false;
-				printf("Script finished\n");
-			}
+		} else {
+			scriptState = COMPLETE;
+			printf("Script finished\n");
 		}
 	} else {
-		// Show loading or error screen (MiniScript not running yet)
+		// Show loading, error, or completion screen
 		BeginDrawing();
 		ClearBackground(RAYWHITE);
 
-		if (!scriptLoaded) {
+		if (scriptState == LOADING) {
 			// Loading screen
-			DrawText("MSRLWeb - MiniScript + Raylib", 10, 10, 24, DARKBLUE);
-			if (loadError.empty()) {
-				DrawText("Loading assets/main.ms...", 10, 50, 20, GRAY);
+			DrawText("MSRLWeb - MiniScript + Raylib", 10, 10, 30, DARKBLUE);
+			DrawText("Loading assets/main.ms...", 10, 50, 20, GRAY);
 
-				// Simple loading animation
-				int dots = ((int)(GetTime() * 2)) % 4;
-				const char* dotStr[] = {"", ".", "..", "..."};
-				DrawText(dotStr[dots], 250, 50, 20, GRAY);
-			} else {
+			// Simple loading animation
+			int dots = ((int)(GetTime() * 2)) % 4;
+			const char* dotStr[] = {"", ".", "..", "..."};
+			DrawText(dotStr[dots], 250, 50, 20, GRAY);
+		} else if (scriptState == ERRORED) {
+			// Error screen
+			DrawText("MSRLWeb - MiniScript + Raylib", 10, 10, 30, DARKBLUE);
+			if (!loadError.empty()) {
 				DrawText("Error loading script:", 10, 50, 20, RED);
 				DrawText(loadError.c_str(), 10, 80, 16, RED);
-				DrawText("Make sure assets/main.ms exists", 10, 110, 14, GRAY);
+				DrawText("Make sure assets/main.ms exists", 10, 110, 10, GRAY);
+			} else if (!runtimeError.empty()) {
+				DrawText("The game has halted due to an error:", 10, 50, 20, RED);
+				DrawText(runtimeError.c_str(), 10, 80, 20, RED);
+				int y = 110;
+				for (int i = 0; i < stackTrace.Count(); i++) {
+					String entry = stackTrace[i].ToString();
+					DrawText(entry.c_str(), 30, y, 20, GRAY);
+					y += 20;
+				}
 			}
-		} else {
+		} else if (scriptState == COMPLETE) {
 			// Script finished
-			DrawText("Script Completed", 10, 10, 24, DARKGREEN);
-			DrawText("Check console for output", 10, 50, 16, GRAY);
+			DrawText("Script Completed", 10, 10, 20, DARKGREEN);
+			DrawText("Check console for output", 10, 50, 10, GRAY);
 		}
 
 		EndDrawing();
@@ -195,6 +214,12 @@ int main() {
 
 	InitWindow(screenWidth, screenHeight, "MSRLWeb - MiniScript + Raylib");
 	SetTargetFPS(60);
+
+	// Set default font to use point filtering for pixel-perfect rendering
+	Font defaultFont = GetFontDefault();
+	SetTextureFilter(defaultFont.texture, TEXTURE_FILTER_POINT);
+	printf("Default font base size: %d\n", defaultFont.baseSize);
+	printf("For pixel-perfect text, use font sizes that are multiples of %d\n", defaultFont.baseSize);
 
 	// Initialize MiniScript
 	InitMiniScript();
