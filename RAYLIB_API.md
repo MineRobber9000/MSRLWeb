@@ -73,4 +73,4 @@ Generated from: src/RaylibIntrinsics.cpp
 
 ---
 
-*Generated on Fri Nov  7 12:50:02 MST 2025*
+*Generated on Sat Nov  8 07:58:09 MST 2025*

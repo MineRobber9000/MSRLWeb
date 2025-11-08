@@ -1,7 +1,8 @@
 // main.ms
 // Simple test script for MSRLWeb
 
-print "main.ms running!"
+print "main.ms running!  Version info:"
+print version
 
 wumpusTex = raylib.LoadTexture("assets/Wumpus.png")
 woobleSnd = raylib.LoadSound("assets/wooble.wav")

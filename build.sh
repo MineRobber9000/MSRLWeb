@@ -8,6 +8,13 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Check for clean argument
+if [ "$1" == "clean" ]; then
+    echo -e "${YELLOW}Cleaning build directory...${NC}"
+    rm -rf build
+    echo -e "${GREEN}Build directory cleaned!${NC}"
+fi
+
 echo "Building MSRLWeb (MiniScript + Raylib)..."
 
 # Check if emcmake is available, if not try to activate emsdk

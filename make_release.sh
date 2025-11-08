@@ -12,32 +12,39 @@ ZIP_FILE="msrlweb-${VERSION}.zip"
 echo "Building MSRLWeb release package (version: ${VERSION})..."
 echo ""
 
-# Step 1: Clean and build
-echo "[1/6] Building project..."
-./build.sh
+# Step 1: Update version number in source code
+echo "[1/7] Updating version number in main.cpp..."
+# Extract major.minor from version (e.g., 0.2.1 -> 0.2) for numeric hostVersion
+HOST_VERSION=$(echo "${VERSION}" | sed 's/^\([0-9]*\.[0-9]*\).*/\1/')
+sed -i '' "s/MiniScript::hostVersion = [0-9.]*;/MiniScript::hostVersion = ${HOST_VERSION};/" src/main.cpp
+echo "Set hostVersion to ${HOST_VERSION} (from release version ${VERSION})"
+
+# Step 2: Clean and build
+echo "[2/7] Clean building project..."
+./build.sh clean
 if [ $? -ne 0 ]; then
     echo "Build failed!"
     exit 1
 fi
 
-# Step 2: Generate API documentation
-echo "[2/6] Generating API documentation..."
+# Step 3: Generate API documentation
+echo "[3/7] Generating API documentation..."
 ./generate_api_doc.sh
 
-# Step 3: Create distribution directory
-echo "[3/6] Creating distribution directory..."
+# Step 4: Create distribution directory
+echo "[4/7] Creating distribution directory..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-# Step 4: Copy build artifacts
-echo "[4/6] Copying build artifacts..."
+# Step 5: Copy build artifacts
+echo "[5/7] Copying build artifacts..."
 cp build/msrlweb.html "$DIST_DIR/"
 cp build/msrlweb.js "$DIST_DIR/"
 cp build/msrlweb.wasm "$DIST_DIR/"
 cp index.html "$DIST_DIR/"
 
-# Step 5: Copy assets and documentation
-echo "[5/6] Copying assets and documentation..."
+# Step 6: Copy assets and documentation
+echo "[6/7] Copying assets and documentation..."
 cp -r assets "$DIST_DIR/"
 cp RAYLIB_API.md "$DIST_DIR/"
 
@@ -192,8 +199,8 @@ raylib.UpdateMusicStream music  // Must call each frame!
 Happy game making! 🎮
 EOF
 
-# Step 6: Create zip file
-echo "[6/6] Creating release archive..."
+# Step 7: Create zip file
+echo "[7/7] Creating release archive..."
 cd dist
 rm -f "../${ZIP_FILE}"
 zip -r "../${ZIP_FILE}" "msrlweb-${VERSION}" > /dev/null

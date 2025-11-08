@@ -5,6 +5,7 @@
 #include "SimpleString.h"
 #include "MiniscriptInterpreter.h"
 #include "MiniscriptIntrinsics.h"
+#include "MiniscriptParser.h"
 #include "RaylibIntrinsics.h"
 #include <emscripten/emscripten.h>
 #include <emscripten/fetch.h>
@@ -91,10 +92,168 @@ void fetchScript(const char *url) {
 }
 
 //--------------------------------------------------------------------------------
+// Import intrinsic
+//--------------------------------------------------------------------------------
+
+#include <map>
+
+// Track import fetches
+struct ImportFetchData {
+	emscripten_fetch_t* fetch;
+	bool completed;
+	int status;
+	String libname;
+	int searchPathIndex;  // Which search path we're trying (0 = assets/, 1 = assets/lib/)
+	ImportFetchData() : fetch(nullptr), completed(false), status(0), searchPathIndex(0) {}
+};
+
+static std::map<long, ImportFetchData> activeImportFetches;
+static long nextImportFetchId = 1;
+
+// Callback when import fetch completes
+static void import_fetch_completed(emscripten_fetch_t *fetch) {
+	for (auto& pair : activeImportFetches) {
+		if (pair.second.fetch == fetch) {
+			pair.second.completed = true;
+			pair.second.status = fetch->status;
+			printf("import_fetch_completed: Fetch ID %ld completed with status %d\n", pair.first, fetch->status);
+			break;
+		}
+	}
+}
+
+static IntrinsicResult intrinsic_import(Context *context, IntrinsicResult partialResult) {
+	// State 3: Import function has finished, store result in parent context
+	if (!partialResult.Done() && partialResult.Result().type == ValueType::String) {
+		// The import function has finished, and stored its result in Temp 0.
+		Value importedValues = context->GetTemp(0);
+		// Store these imported values in the parent context under the library name
+		String libname = partialResult.Result().ToString();
+		Context *callerContext = context->parent;
+		if (callerContext) {
+			callerContext->SetVar(libname, importedValues);
+		}
+		return IntrinsicResult::Null;
+	}
+
+	// State 2: File has been fetched, parse and create import
+	if (!partialResult.Done() && partialResult.Result().type == ValueType::Number) {
+		long fetchId = (long)partialResult.Result().DoubleValue();
+		auto it = activeImportFetches.find(fetchId);
+		if (it == activeImportFetches.end()) {
+			printf("import: Fetch ID %ld not found!\n", fetchId);
+			RuntimeException("import: internal error (fetch not found)").raise();
+		}
+
+		ImportFetchData& data = it->second;
+
+		if (!data.completed) {
+			// Still loading
+			return partialResult;
+		}
+
+		// Fetch is complete
+		emscripten_fetch_t* fetch = data.fetch;
+		String libname = data.libname;
+
+		if (data.status == 200) {
+			// Success - parse the module source
+			char* moduleData = (char*)malloc(fetch->numBytes + 1);
+			if (!moduleData) {
+				emscripten_fetch_close(fetch);
+				activeImportFetches.erase(it);
+				RuntimeException("import: memory allocation failed").raise();
+			}
+			memcpy(moduleData, fetch->data, fetch->numBytes);
+			moduleData[fetch->numBytes] = '\0';
+			String moduleSource(moduleData);
+			free(moduleData);
+
+			emscripten_fetch_close(fetch);
+			activeImportFetches.erase(it);
+
+			// Parse the code and build a function around it
+			Parser parser;
+			parser.errorContext = libname + ".ms";
+			parser.Parse(moduleSource);
+			FunctionStorage *import = parser.CreateImport();
+			context->vm->ManuallyPushCall(import, Value::Temp(0));
+
+			// Return partial result with the lib name (string type)
+			// We'll get invoked again after the import function finishes
+			return IntrinsicResult(libname, false);
+		} else {
+			// Error loading file - try next search path if available
+			emscripten_fetch_close(fetch);
+			int nextPathIndex = data.searchPathIndex + 1;
+			activeImportFetches.erase(it);
+
+			const char* searchPaths[] = { "assets/", "assets/lib/" };
+			if (nextPathIndex < 2) {
+				// Try the next path
+				String path = String(searchPaths[nextPathIndex]) + libname + ".ms";
+
+				long newFetchId = nextImportFetchId++;
+				ImportFetchData& newData = activeImportFetches[newFetchId];
+				newData.libname = libname;
+				newData.searchPathIndex = nextPathIndex;
+
+				emscripten_fetch_attr_t attr;
+				emscripten_fetch_attr_init(&attr);
+				strcpy(attr.requestMethod, "GET");
+				attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+				attr.onsuccess = import_fetch_completed;
+				attr.onerror = import_fetch_completed;
+
+				newData.fetch = emscripten_fetch(&attr, path.c_str());
+				printf("import: First path failed, trying fetch ID %ld for %s\n", newFetchId, path.c_str());
+
+				return IntrinsicResult(Value((double)newFetchId), false);
+			} else {
+				// All paths exhausted
+				RuntimeException("import: library not found: " + libname).raise();
+			}
+		}
+	}
+
+	// State 1: Start the import - fetch the file
+	String libname = context->GetVar("libname").ToString();
+	if (libname.empty()) {
+		RuntimeException("import: libname required").raise();
+	}
+
+	// Try to find the file - start with assets/
+	String path = String("assets/") + libname + ".ms";
+
+	// Start async fetch
+	long fetchId = nextImportFetchId++;
+	ImportFetchData& data = activeImportFetches[fetchId];
+	data.libname = libname;
+	data.searchPathIndex = 0;
+
+	emscripten_fetch_attr_t attr;
+	emscripten_fetch_attr_init(&attr);
+	strcpy(attr.requestMethod, "GET");
+	attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+	attr.onsuccess = import_fetch_completed;
+	attr.onerror = import_fetch_completed;
+
+	data.fetch = emscripten_fetch(&attr, path.c_str());
+	printf("import: Started fetch ID %ld for %s\n", fetchId, path.c_str());
+
+	// Return the fetch ID as partial result (number type)
+	return IntrinsicResult(Value((double)fetchId), false);
+}
+
+//--------------------------------------------------------------------------------
 // Initialize MiniScript
 //--------------------------------------------------------------------------------
 
 void InitMiniScript() {
+	MiniScript::hostVersion = 0.2;
+	MiniScript::hostName = "MSRLWeb";
+	MiniScript::hostInfo = "https://github.com/JoeStrout/MSRLWeb";
+
 	interpreter = new Interpreter();
 	interpreter->standardOutput = &Print;
 	interpreter->errorOutput = &PrintErr;
@@ -102,6 +261,11 @@ void InitMiniScript() {
 
 	// Add Raylib intrinsics
 	AddRaylibIntrinsics();
+
+	// Add import intrinsic
+	Intrinsic *importFunc = Intrinsic::Create("import");
+	importFunc->AddParam("libname", "");
+	importFunc->code = &intrinsic_import;
 
 	printf("MiniScript interpreter initialized with Raylib intrinsics\n");
 }
