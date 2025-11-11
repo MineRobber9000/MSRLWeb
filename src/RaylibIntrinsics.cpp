@@ -2083,12 +2083,22 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	// AudioStream management
 
 	i = Intrinsic::Create("");
+	i->AddParam("sampleRate", Value(44100));
+	i->AddParam("sampleSize", Value(32));
+	i->AddParam("channels", Value(1));
+	i->code = INTRINSIC_LAMBDA {
+		AudioStream stream = LoadAudioStream(context->GetVar(String("sampleRate")).IntValue(), context->GetVar(String("sampleSize")).IntValue(), context->GetVar(String("channels")).IntValue());
+		return IntrinsicResult(AudioStreamToValue(stream));
+	};
+	raylibModule.SetValue("LoadAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
 	i->AddParam("stream");
 	i->code = INTRINSIC_LAMBDA {
 		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
 		return IntrinsicResult(IsAudioStreamValid(stream));
 	};
-	raylibModule.SetValue("IsAudioStreamReady", i->GetFunc());
+	raylibModule.SetValue("IsAudioStreamValid", i->GetFunc());
 
 	i = Intrinsic::Create("");
 	i->AddParam("stream");
@@ -2105,6 +2115,35 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 		return IntrinsicResult::Null;
 	};
 	raylibModule.SetValue("UnloadAudioStream", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("stream");
+	i->AddParam("data");
+	i->code = INTRINSIC_LAMBDA {
+		#include <string>
+		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
+		ValueList data = context->GetVar(String("data")).GetList();
+
+#define PROCESS_DATA(TYPE, VALUE) \
+		TYPE *buffer = new TYPE[data.Count()]; \
+		for (long i=0;i<data.Count();++i) { \
+			buffer[i] = static_cast<TYPE>(data.Item(i).VALUE()); \
+		}; \
+		UpdateAudioStream(stream, buffer, data.Count());
+
+		if (stream.sampleSize==8) {
+			PROCESS_DATA(unsigned char, IntValue)
+		} else if (stream.sampleSize==16) {
+			PROCESS_DATA(signed short, IntValue)
+		} else {
+			PROCESS_DATA(float, FloatValue)
+		}
+
+#undef PROCESS_DATA
+
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UpdateAudioStream", i->GetFunc());
 
 	i = Intrinsic::Create("");
 	i->AddParam("stream");
