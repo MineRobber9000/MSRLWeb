@@ -56,9 +56,11 @@ Bounds.width = 100; Bounds.height = 100
 //----------------------------------------------------------------------
 
 GameSprite = new Sprite
+GameSprite.srcTexture = spriteSheetTex
 GameSprite.scale = 0.5
 GameSprite.v = null  // x and y
 GameSprite.destroyed = false
+GameSprite.radius = null
 
 GameSprite.update = function(dt)
 	self.x = self.x + self.v.x * dt
@@ -78,12 +80,35 @@ end function
 GameSprite.init = function
 	self.v = {"x":0, "y":0}
 	self.destroyed = false
+	if self.radius == null and self.srcRect then
+		self.radius = self.srcRect[2]/2 * self.scale
+	end if
 	sprites.push self
 end function
 
 GameSprite.destroy = function
 	self.destroyed = true
 	sprites.removeVal self
+end function
+
+GameSprite.overlaps = function(other)
+	// For the sake of this demo, we'll assume all sprites are roughly
+	// circular, so we can just do a distance test.
+	r = self.radius + other.radius
+	return (self.x - other.x)^2 + (self.y - other.y)^2 < r^2
+end function
+
+GameSprite.contains = function(point)
+	// For the sake of this demo, we'll assume all sprites are roughly
+	// circular, so we can just do a distance test.
+	r = self.radius
+	return (self.x - point.x)^2 + (self.y - point.y)^2 < r^2
+end function
+
+// Draw the radius circle, for debugging:
+GameSprite.draw = function
+	raylib.DrawCircle self.x, self.y, self.radius, [255, 255, 100, 128]
+	super.draw
 end function
 
 //----------------------------------------------------------------------
@@ -99,6 +124,8 @@ ship.localBounds.width = 64
 ship.localBounds.height = 32
 ship.tint = color.lime
 ship.thrusting = false
+ship.scale = 0.5
+ship.radius = 18
 
 ship.reset = function
 	self.x = 480
@@ -108,11 +135,9 @@ end function
 
 ship.init = function
 	super.init
-	self.srcTexture = spriteSheetTex
 	self.srcRectEngineOff = [32*6, 32*8, 32*3, 32*2]
 	self.srcRectEngineOn =  [32*9, 32*8, 32*3, 32*2]
 	self.srcRect = self.srcRectEngineOff
-	self.scale = 0.5
 	self.reset
 end function
 
@@ -185,8 +210,8 @@ end function
 //----------------------------------------------------------------------
 
 Bullet = new TimedSprite
-Bullet.srcTexture = spriteSheetTex
 Bullet.srcRect = [14*32, 9*32, 32, 32]
+Bullet.radius = 2
 Bullet.instances = []
 
 Bullet.init = function(lifetime = 0.6)
@@ -201,8 +226,90 @@ end function
 
 //----------------------------------------------------------------------
 
+Enemy = new GameSprite
+Enemy.spin = 0
+Enemy.scoreValue = 100
+
+Enemy.update = function(dt)
+	self.rotation = self.rotation + self.spin * dt
+	if self.overlaps(ship) and not ship.destroyed then
+		ship.destroy	// comment out this line for invulnerability!
+		self.destroy
+	else
+		for b in Bullet.instances
+			if self.contains(b) then
+				//addPoints self.scoreValue
+				self.destroy
+				b.destroy
+			end if
+		end for	
+	end if
+	super.update dt	
+end function
+
+//----------------------------------------------------------------------
+
+Rock = new Enemy
+Rock.scale = 0.5
+Rock.size = 0
+Rock.srcRects = []  // indexed by type; within each type, indexed by size
+for type in range(0, 2)
+	Rock.srcRects.push []
+	Rock.srcRects[type].push [160*type, 0, 160, 160]
+	Rock.srcRects[type].push [96*type, 160, 96, 96]
+	Rock.srcRects[type].push [64*type, 256, 64, 64]
+end for
+
+Rock.init = function(size=0)
+	super.init
+	self.size = size
+	self.srcRect = Rock.srcRects[rnd*3][size]
+	self.radius = self.srcRect[2]/2 * 0.75 * self.scale
+	self.spin = 360 * (rnd - 0.5)
+end function
+
+Rock.scoreValue = function
+	return [20, 50, 100][self.size]
+end function
+
+Rock.destroy = function
+	super.destroy
+	hit.play 0.7, (self.x - 480)/480, 0.5 + 0.2*self.size
+	//makeDebris self
+	if self.size < 2 then
+		// break into two rocks of the next size down
+		Rock.Make self.size+1, self
+		Rock.Make self.size+1, self
+	end if
+	//heartbeat.updateInterval
+end function
+
+Rock.Make = function(size=0, position=null)
+	rock = new Rock
+	rock.init size
+	if position then
+		rock.x = position.x
+		rock.y = position.y
+	else
+		rock.x = 960 * rnd
+		rock.y = 640 * rnd
+	end if
+	rock.v.x = (rnd-0.5) * 300
+	rock.v.y = (rnd-0.5) * 300
+end function
+
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+
+
 init = function
 	ship.init
+	for i in range(0,7)
+		Rock.Make
+	end for
 end function
 
 update = function(dt)

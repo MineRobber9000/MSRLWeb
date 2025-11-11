@@ -366,27 +366,43 @@ static RenderTexture2D ValueToRenderTexture(Value value) {
 }
 
 // Convert a MiniScript map to a Raylib Color
-// Expects a map with "r", "g", "b", and optionally "a" keys (0-255)
+// Expects a map with "r", "g", "b", and optionally "a" keys (0-255);
+// or, a 3- or 4-element list in the order [r, g, b, a].
 static Color ValueToColor(Value value) {
-	if (value.type != ValueType::Map) {
-		// Default to white if not a map
-		return WHITE;
-	}
-
-	ValueDict map = value.GetDict();
 	Color result;
 
-	Value rVal = map.Lookup(String("r"), Value::zero);
-	Value gVal = map.Lookup(String("g"), Value::zero);
-	Value bVal = map.Lookup(String("b"), Value::zero);
-	Value aVal = map.Lookup(String("a"), Value::null);
+	// Handle list format: [r, g, b, a] or [r, g, b]
+	if (value.type == ValueType::List) {
+		ValueList list = value.GetList();
+		if (list.Count() >= 3) {
+			result.r = (unsigned char)(list[0].IntValue());
+			result.g = (unsigned char)(list[1].IntValue());
+			result.b = (unsigned char)(list[2].IntValue());
+			result.a = list.Count() >= 4 ? (unsigned char)(list[3].IntValue()) : 255;
+			return result;
+		}
+		// If list has fewer than 3 elements, fall through to default
+	}
 
-	result.r = (unsigned char)(rVal.IntValue());
-	result.g = (unsigned char)(gVal.IntValue());
-	result.b = (unsigned char)(bVal.IntValue());
-	result.a = aVal.IsNull() ? 255 : (unsigned char)(aVal.IntValue());
+	// Handle map format: {"r": r, "g": g, "b": b, "a": a}
+	if (value.type == ValueType::Map) {
+		ValueDict map = value.GetDict();
 
-	return result;
+		Value rVal = map.Lookup(String("r"), Value::zero);
+		Value gVal = map.Lookup(String("g"), Value::zero);
+		Value bVal = map.Lookup(String("b"), Value::zero);
+		Value aVal = map.Lookup(String("a"), Value::null);
+
+		result.r = (unsigned char)(rVal.IntValue());
+		result.g = (unsigned char)(gVal.IntValue());
+		result.b = (unsigned char)(bVal.IntValue());
+		result.a = aVal.IsNull() ? 255 : (unsigned char)(aVal.IntValue());
+
+		return result;
+	}
+
+	// Default to white if neither list nor map
+	return WHITE;
 }
 
 // Convert a Raylib Color to a MiniScript map
