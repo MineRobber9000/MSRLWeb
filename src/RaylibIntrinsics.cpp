@@ -12,6 +12,7 @@
 #include <emscripten/fetch.h>
 #include <math.h>
 #include <string.h>
+#include <map>
 
 using namespace MiniScript;
 
@@ -22,7 +23,6 @@ using namespace MiniScript;
 // Fetch callbacks for async loading
 //--------------------------------------------------------------------------------
 
-#include <map>
 
 // Track in-flight fetches by ID
 struct FetchData {
