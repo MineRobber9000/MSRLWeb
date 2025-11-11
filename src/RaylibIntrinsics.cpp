@@ -130,6 +130,16 @@ static ValueDict AudioStreamClass() {
 	return map;
 }
 
+static ValueDict RenderTextureClass() {
+	static ValueDict map;
+	if (map.Count() == 0) {
+		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("id"), Value::zero);
+		map.SetValue(String("texture"), Value::zero);
+	}
+	return map;
+}
+
 //--------------------------------------------------------------------------------
 // Helper functions
 //--------------------------------------------------------------------------------
@@ -326,6 +336,33 @@ static AudioStream ValueToAudioStream(Value value) {
 		return AudioStream{};
 	}
 	return *streamPtr;
+}
+
+// Convert a Raylib RenderTexture2D to a MiniScript map
+// Allocates the RenderTexture2D on the heap and stores pointer in _handle
+static Value RenderTextureToValue(RenderTexture2D renderTexture) {
+	RenderTexture2D* rtPtr = new RenderTexture2D(renderTexture);
+	ValueDict map;
+	map.SetValue(Value::magicIsA, RenderTextureClass());
+	map.SetValue(String("_handle"), Value((long)rtPtr));
+	map.SetValue(String("id"), Value((int)renderTexture.id));
+	map.SetValue(String("texture"), TextureToValue(renderTexture.texture));
+	return Value(map);
+}
+
+// Extract a Raylib RenderTexture2D from a MiniScript map
+// Returns the RenderTexture2D by dereferencing the _handle pointer
+static RenderTexture2D ValueToRenderTexture(Value value) {
+	if (value.type != ValueType::Map) {
+		return RenderTexture2D{};
+	}
+	ValueDict map = value.GetDict();
+	Value handleVal = map.Lookup(String("_handle"), Value::zero);
+	RenderTexture2D* rtPtr = (RenderTexture2D*)(long)handleVal.IntValue();
+	if (rtPtr == nullptr) {
+		return RenderTexture2D{};
+	}
+	return *rtPtr;
 }
 
 // Convert a MiniScript map to a Raylib Color
@@ -1177,6 +1214,51 @@ static void AddRTexturesMethods(ValueDict raylibModule) {
 		return IntrinsicResult::Null;
 	};
 	raylibModule.SetValue("GenTextureMipmaps", i->GetFunc());
+
+	// RenderTexture2D loading/unloading
+
+	i = Intrinsic::Create("");
+	i->AddParam("width", Value(960));
+	i->AddParam("height", Value(640));
+	i->code = INTRINSIC_LAMBDA {
+		int width = context->GetVar(String("width")).IntValue();
+		int height = context->GetVar(String("height")).IntValue();
+		RenderTexture2D renderTexture = LoadRenderTexture(width, height);
+		return IntrinsicResult(RenderTextureToValue(renderTexture));
+	};
+	raylibModule.SetValue("LoadRenderTexture", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("target");
+	i->code = INTRINSIC_LAMBDA {
+		RenderTexture2D target = ValueToRenderTexture(context->GetVar(String("target")));
+		UnloadRenderTexture(target);
+		// Free the heap-allocated RenderTexture2D struct
+		ValueDict map = context->GetVar(String("target")).GetDict();
+		Value handleVal = map.Lookup(String("_handle"), Value::zero);
+		RenderTexture2D* rtPtr = (RenderTexture2D*)(long)handleVal.IntValue();
+		delete rtPtr;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadRenderTexture", i->GetFunc());
+
+	// RenderTexture2D drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("target");
+	i->code = INTRINSIC_LAMBDA {
+		RenderTexture2D target = ValueToRenderTexture(context->GetVar(String("target")));
+		BeginTextureMode(target);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("BeginTextureMode", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->code = INTRINSIC_LAMBDA {
+		EndTextureMode();
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("EndTextureMode", i->GetFunc());
 }
 
 //--------------------------------------------------------------------------------
