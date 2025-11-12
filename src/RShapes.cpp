@@ -561,4 +561,487 @@ void AddRShapesMethods(ValueDict raylibModule) {
 		return IntrinsicResult(RectangleToValue(result));
 	};
 	raylibModule.SetValue("GetCollisionRec", i->GetFunc());
+
+	// Additional collision detection
+
+	i = Intrinsic::Create("");
+	i->AddParam("center");
+	i->AddParam("radius");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 center = ValueToVector2(context->GetVar(String("center")));
+		float radius = context->GetVar(String("radius")).FloatValue();
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		return IntrinsicResult(CheckCollisionCircleLine(center, radius, p1, p2));
+	};
+	raylibModule.SetValue("CheckCollisionCircleLine", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("startPos1");
+	i->AddParam("endPos1");
+	i->AddParam("startPos2");
+	i->AddParam("endPos2");
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 startPos1 = ValueToVector2(context->GetVar(String("startPos1")));
+		Vector2 endPos1 = ValueToVector2(context->GetVar(String("endPos1")));
+		Vector2 startPos2 = ValueToVector2(context->GetVar(String("startPos2")));
+		Vector2 endPos2 = ValueToVector2(context->GetVar(String("endPos2")));
+		Vector2 collisionPoint;
+		bool result = CheckCollisionLines(startPos1, endPos1, startPos2, endPos2, &collisionPoint);
+		if (!result) return IntrinsicResult::Null;
+		return IntrinsicResult(Vector2ToValue(collisionPoint));
+	};
+	raylibModule.SetValue("CheckCollisionLines", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("point");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->AddParam("threshold");
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 point = ValueToVector2(context->GetVar(String("point")));
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		int threshold = context->GetVar(String("threshold")).IntValue();
+		return IntrinsicResult(CheckCollisionPointLine(point, p1, p2, threshold));
+	};
+	raylibModule.SetValue("CheckCollisionPointLine", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("point");
+	i->AddParam("points");
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 point = ValueToVector2(context->GetVar(String("point")));
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 3) return IntrinsicResult(Value::zero);
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		bool result = CheckCollisionPointPoly(point, points, pointCount);
+		delete[] points;
+		return IntrinsicResult(result);
+	};
+	raylibModule.SetValue("CheckCollisionPointPoly", i->GetFunc());
+
+	// Additional circle drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("centerX", Value::zero);
+	i->AddParam("centerY", Value::zero);
+	i->AddParam("radius", Value(10.0));
+	i->AddParam("colorInner", ColorToValue(WHITE));
+	i->AddParam("colorOuter", ColorToValue(BLACK));
+	i->code = INTRINSIC_LAMBDA {
+		int centerX = context->GetVar(String("centerX")).IntValue();
+		int centerY = context->GetVar(String("centerY")).IntValue();
+		float radius = context->GetVar(String("radius")).FloatValue();
+		Color colorInner = ValueToColor(context->GetVar(String("colorInner")));
+		Color colorOuter = ValueToColor(context->GetVar(String("colorOuter")));
+		DrawCircleGradient(centerX, centerY, radius, colorInner, colorOuter);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawCircleGradient", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("center");
+	i->AddParam("radius", Value(10.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 center = ValueToVector2(context->GetVar(String("center")));
+		float radius = context->GetVar(String("radius")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawCircleLinesV(center, radius, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawCircleLinesV", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("center");
+	i->AddParam("radius", Value(10.0));
+	i->AddParam("startAngle", Value::zero);
+	i->AddParam("endAngle", Value(90.0));
+	i->AddParam("segments", Value(36));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 center = ValueToVector2(context->GetVar(String("center")));
+		float radius = context->GetVar(String("radius")).FloatValue();
+		float startAngle = context->GetVar(String("startAngle")).FloatValue();
+		float endAngle = context->GetVar(String("endAngle")).FloatValue();
+		int segments = context->GetVar(String("segments")).IntValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawCircleSector(center, radius, startAngle, endAngle, segments, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawCircleSector", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("center");
+	i->AddParam("radius", Value(10.0));
+	i->AddParam("startAngle", Value::zero);
+	i->AddParam("endAngle", Value(90.0));
+	i->AddParam("segments", Value(36));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 center = ValueToVector2(context->GetVar(String("center")));
+		float radius = context->GetVar(String("radius")).FloatValue();
+		float startAngle = context->GetVar(String("startAngle")).FloatValue();
+		float endAngle = context->GetVar(String("endAngle")).FloatValue();
+		int segments = context->GetVar(String("segments")).IntValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawCircleSectorLines(center, radius, startAngle, endAngle, segments, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawCircleSectorLines", i->GetFunc());
+
+	// Additional ellipse drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("center");
+	i->AddParam("radiusH", Value(10.0));
+	i->AddParam("radiusV", Value(5.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 center = ValueToVector2(context->GetVar(String("center")));
+		float radiusH = context->GetVar(String("radiusH")).FloatValue();
+		float radiusV = context->GetVar(String("radiusV")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawEllipseV(center, radiusH, radiusV, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawEllipseV", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("center");
+	i->AddParam("radiusH", Value(10.0));
+	i->AddParam("radiusV", Value(5.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 center = ValueToVector2(context->GetVar(String("center")));
+		float radiusH = context->GetVar(String("radiusH")).FloatValue();
+		float radiusV = context->GetVar(String("radiusV")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawEllipseLinesV(center, radiusH, radiusV, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawEllipseLinesV", i->GetFunc());
+
+	// Additional line drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("startPos");
+	i->AddParam("endPos");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 startPos = ValueToVector2(context->GetVar(String("startPos")));
+		Vector2 endPos = ValueToVector2(context->GetVar(String("endPos")));
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawLineBezier(startPos, endPos, thick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawLineBezier", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 2) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawLineStrip(points, pointCount, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawLineStrip", i->GetFunc());
+
+	// Additional rectangle drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("rec");
+	i->AddParam("roundness", Value(0.0));
+	i->AddParam("segments", Value::zero);
+	i->AddParam("lineThick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Rectangle rec = ValueToRectangle(context->GetVar(String("rec")));
+		float roundness = context->GetVar(String("roundness")).FloatValue();
+		int segments = context->GetVar(String("segments")).IntValue();
+		float lineThick = context->GetVar(String("lineThick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawRectangleRoundedLinesEx(rec, roundness, segments, lineThick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawRectangleRoundedLinesEx", i->GetFunc());
+
+	// Spline drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 2) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineLinear(points, pointCount, thick, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineLinear", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 4) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineBasis(points, pointCount, thick, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineBasis", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 2) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineCatmullRom(points, pointCount, thick, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineCatmullRom", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 3) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineBezierQuadratic(points, pointCount, thick, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineBezierQuadratic", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 4) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineBezierCubic(points, pointCount, thick, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineBezierCubic", i->GetFunc());
+
+	// Spline segment drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineSegmentLinear(p1, p2, thick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineSegmentLinear", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->AddParam("p3");
+	i->AddParam("p4");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		Vector2 p3 = ValueToVector2(context->GetVar(String("p3")));
+		Vector2 p4 = ValueToVector2(context->GetVar(String("p4")));
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineSegmentBasis(p1, p2, p3, p4, thick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineSegmentBasis", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->AddParam("p3");
+	i->AddParam("p4");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		Vector2 p3 = ValueToVector2(context->GetVar(String("p3")));
+		Vector2 p4 = ValueToVector2(context->GetVar(String("p4")));
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineSegmentCatmullRom(p1, p2, p3, p4, thick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineSegmentCatmullRom", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->AddParam("p3");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		Vector2 p3 = ValueToVector2(context->GetVar(String("p3")));
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineSegmentBezierQuadratic(p1, p2, p3, thick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineSegmentBezierQuadratic", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("p1");
+	i->AddParam("p2");
+	i->AddParam("p3");
+	i->AddParam("p4");
+	i->AddParam("thick", Value(1.0));
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		Vector2 p1 = ValueToVector2(context->GetVar(String("p1")));
+		Vector2 p2 = ValueToVector2(context->GetVar(String("p2")));
+		Vector2 p3 = ValueToVector2(context->GetVar(String("p3")));
+		Vector2 p4 = ValueToVector2(context->GetVar(String("p4")));
+		float thick = context->GetVar(String("thick")).FloatValue();
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawSplineSegmentBezierCubic(p1, p2, p3, p4, thick, color);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawSplineSegmentBezierCubic", i->GetFunc());
+
+	// Additional triangle drawing
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 3) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawTriangleFan(points, pointCount, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawTriangleFan", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("points");
+	i->AddParam("color", ColorToValue(WHITE));
+	i->code = INTRINSIC_LAMBDA {
+		ValueList pointsList = context->GetVar(String("points")).GetList();
+		int pointCount = pointsList.Count();
+		if (pointCount < 3) return IntrinsicResult::Null;
+
+		Vector2* points = new Vector2[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			points[i] = ValueToVector2(pointsList[i]);
+		}
+
+		Color color = ValueToColor(context->GetVar(String("color")));
+		DrawTriangleStrip(points, pointCount, color);
+		delete[] points;
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("DrawTriangleStrip", i->GetFunc());
+
+	// Texture setup
+
+	i = Intrinsic::Create("");
+	i->AddParam("texture");
+	i->AddParam("source");
+	i->code = INTRINSIC_LAMBDA {
+		Texture texture = ValueToTexture(context->GetVar(String("texture")));
+		Rectangle source = ValueToRectangle(context->GetVar(String("source")));
+		SetShapesTexture(texture, source);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetShapesTexture", i->GetFunc());
 }
