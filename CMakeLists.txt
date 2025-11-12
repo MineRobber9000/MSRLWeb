@@ -41,11 +41,19 @@ add_executable(msrlweb
     src/main.cpp
     src/loadfile.cpp
     src/RaylibIntrinsics.cpp
+    src/RaylibTypes.cpp
+    src/RAudio.cpp
+    src/RCore.cpp
+    src/RShapes.cpp
+    src/RText.cpp
+    src/RTextures.cpp
+    src/RaylibConstants.cpp
     ${MINISCRIPT_SOURCES}
 )
 
 # Include directories
 target_include_directories(msrlweb PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/MiniScript
     ${CMAKE_SOURCE_DIR}/raylib/src
 )
