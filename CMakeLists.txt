@@ -42,6 +42,7 @@ add_executable(msrlweb
     src/loadfile.cpp
     src/RaylibIntrinsics.cpp
     src/RaylibTypes.cpp
+    src/RawData.cpp
     src/RAudio.cpp
     src/RCore.cpp
     src/RShapes.cpp

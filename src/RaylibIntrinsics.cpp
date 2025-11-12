@@ -7,6 +7,7 @@
 
 #include "RaylibIntrinsics.h"
 #include "RaylibTypes.h"
+#include "RawData.h"
 #include "raylib.h"
 #include "MiniscriptInterpreter.h"
 #include "MiniscriptTypes.h"
@@ -36,6 +37,9 @@ void AddRaylibIntrinsics() {
 	Intrinsic *f;
 
 	// Create accessors for the classes
+	f = Intrinsic::Create("RawData");
+	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(RawDataClass()); };
+
 	f = Intrinsic::Create("Image");
 	f->code = INTRINSIC_LAMBDA { return IntrinsicResult(ImageClass()); };
 

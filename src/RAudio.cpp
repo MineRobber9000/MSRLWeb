@@ -7,6 +7,7 @@
 
 #include "RaylibIntrinsics.h"
 #include "RaylibTypes.h"
+#include "RawData.h"
 #include "raylib.h"
 #include "MiniscriptInterpreter.h"
 #include "MiniscriptTypes.h"
@@ -97,6 +98,48 @@ void AddRAudioMethods(ValueDict raylibModule) {
 		return IntrinsicResult::Null;
 	};
 	raylibModule.SetValue("UnloadWave", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("wave");
+	i->code = INTRINSIC_LAMBDA {
+		Wave wave = ValueToWave(context->GetVar(String("wave")));
+		if (!IsWaveValid(wave)) return IntrinsicResult::Null;
+
+		// Load the samples as a float array
+		float* samples = LoadWaveSamples(wave);
+		if (samples == nullptr) return IntrinsicResult::Null;
+
+		// Calculate the number of samples
+		int sampleCount = wave.frameCount * wave.channels;
+		int byteSize = sampleCount * sizeof(float);
+
+		// Wrap in a BinaryData object (takes ownership)
+		BinaryData* data = new BinaryData((unsigned char*)samples, byteSize, true);
+
+		return IntrinsicResult(RawDataToValue(data));
+	};
+	raylibModule.SetValue("LoadWaveSamples", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("samples");
+	i->code = INTRINSIC_LAMBDA {
+		BinaryData* data = ValueToRawData(context->GetVar(String("samples")));
+		if (data == nullptr) return IntrinsicResult::Null;
+
+		// Get the raw buffer and free it using raylib's UnloadWaveSamples
+		float* samples = (float*)data->bytes;
+		if (samples != nullptr) {
+			UnloadWaveSamples(samples);
+			// Release ownership so we don't double-free
+			data->ReleaseOwnership();
+		}
+
+		// Delete the BinaryData wrapper
+		delete data;
+
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UnloadWaveSamples", i->GetFunc());
 
 	// Wave manipulation
 
@@ -413,6 +456,30 @@ void AddRAudioMethods(ValueDict raylibModule) {
 		return IntrinsicResult(IsSoundPlaying(sound));
 	};
 	raylibModule.SetValue("IsSoundPlaying", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("sound");
+	i->AddParam("data");
+	i->AddParam("sampleCount");
+	i->code = INTRINSIC_LAMBDA {
+		Sound sound = ValueToSound(context->GetVar(String("sound")));
+		BinaryData* data = ValueToRawData(context->GetVar(String("data")));
+		int sampleCount = context->GetVar(String("sampleCount")).IntValue();
+
+		if (data == nullptr || data->bytes == nullptr) {
+			RuntimeException("UpdateSound: RawData required for data parameter").raise();
+		}
+
+		if (sampleCount <= 0) {
+			RuntimeException("UpdateSound: sampleCount must be > 0").raise();
+		}
+
+		// Update the sound buffer with the raw data
+		UpdateSound(sound, data->bytes, sampleCount);
+
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("UpdateSound", i->GetFunc());
 
 	i = Intrinsic::Create("");
 	i->AddParam("sound");
