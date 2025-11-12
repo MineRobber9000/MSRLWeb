@@ -1336,14 +1336,35 @@ static void AddRTextMethods(ValueDict raylibModule) {
 
 				printf("LoadFont: url=%s, ext=%s\n", url, ext);
 
-				// For BDF (bitmap) fonts, use 0 to load at native size
-				// For scalable fonts (TTF/OTF), use 32 as default
-				int fontSize = (strcmp(ext, ".bdf") == 0) ? 0 : 32;
+				Font font = {0};
+				if (IsFileExtension(fetch->url, ".ttf;.otf;.bdf")) {
+					// For BDF (bitmap) fonts, use 0 to load at native size
+					// For scalable fonts (TTF/OTF), use 32 as default
+					int fontSize = (strcmp(ext, ".bdf") == 0) ? 0 : 32;
 
-				printf("LoadFont: Loading with fontSize=%d, numBytes=%d\n", fontSize, (int)fetch->numBytes);
-				Font font = LoadFontFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes, fontSize, nullptr, 0);
-				printf("LoadFont: After load - baseSize=%d, glyphCount=%d, texture.id=%d\n",
-				       font.baseSize, font.glyphCount, font.texture.id);
+					printf("LoadFont: Loading with fontSize=%d, numBytes=%d\n", fontSize, (int)fetch->numBytes);
+					font = LoadFontFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes, fontSize, nullptr, 0);
+				} else if (strcmp(ext, ".bmf")==0) {
+					printf("LoadFont: Can't load BMFont font files\n");
+				} else {
+					Image image = LoadImageFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
+					if (image.data==nullptr) {
+						printf("LoadFont: font failed to load\n");
+					} else {
+						printf("LoadFont: loading XNA-style image font\n");
+						font = LoadFontFromImage(image, MAGENTA, 32); // 32 = <SPACE>
+					}
+					UnloadImage(image);
+				}
+				// raylib LoadFont() does this for us, but we can't use that, so we must do it ourselves
+				if (font.texture.id) {
+					SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+					printf("LoadFont: After load - baseSize=%d, glyphCount=%d, texture.id=%d\n",
+					       font.baseSize, font.glyphCount, font.texture.id);
+				} else {
+					printf("LoadFont: load failed, returning default font");
+					font = GetFontDefault();
+				}
 				emscripten_fetch_close(fetch);
 				activeFetches.erase(it);
 				return IntrinsicResult(FontToValue(font));
