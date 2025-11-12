@@ -20,35 +20,6 @@ using namespace MiniScript;
 #define INTRINSIC_LAMBDA [](Context *context, IntrinsicResult partialResult) -> IntrinsicResult
 
 //--------------------------------------------------------------------------------
-// Fetch callbacks for async loading
-//--------------------------------------------------------------------------------
-
-
-// Track in-flight fetches by ID
-struct FetchData {
-	emscripten_fetch_t* fetch;
-	bool completed;
-	int status;
-	FetchData() : fetch(nullptr), completed(false), status(0) {}
-};
-
-static std::map<long, FetchData> activeFetches;
-static long nextFetchId = 1;
-
-// Callback when fetch completes (success or error)
-static void fetch_completed(emscripten_fetch_t *fetch) {
-	// Find this fetch in our map and mark it complete
-	for (auto& pair : activeFetches) {
-		if (pair.second.fetch == fetch) {
-			pair.second.completed = true;
-			pair.second.status = fetch->status;
-			printf("fetch_completed: Fetch ID %ld completed with status %d\n", pair.first, fetch->status);
-			break;
-		}
-	}
-}
-
-//--------------------------------------------------------------------------------
 // Classes (maps) representing Raylib structs
 //--------------------------------------------------------------------------------
 
@@ -505,63 +476,10 @@ static void AddRTexturesMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-			printf("LoadImage: Started fetch ID %ld for %s\n", fetchId, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				printf("LoadImage: Fetch ID %ld not found!\n", fetchId);
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-			printf("LoadImage: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
-
-			if (data.status == 200) {
-				// Success - get file extension and load image from memory
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".png";
-
-				Image img = LoadImageFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(ImageToValue(img));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		Image img = LoadImage(path.c_str());
+		if (!IsImageValid(img)) return IntrinsicResult::Null;
+		return IntrinsicResult(ImageToValue(img));
 	};
 	raylibModule.SetValue("LoadImage", i->GetFunc());
 
@@ -605,69 +523,10 @@ static void AddRTexturesMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-
-			if (data.status == 200) {
-				// Success - load image from memory then create texture
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".png";
-
-				Image img = LoadImageFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
-
-				if (img.data == nullptr) {
-					emscripten_fetch_close(fetch);
-					activeFetches.erase(it);
-					return IntrinsicResult::Null;
-				}
-
-				Texture tex = LoadTextureFromImage(img);
-				UnloadImage(img);  // Don't need the CPU image anymore
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(TextureToValue(tex));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		Texture tex = LoadTexture(path.c_str());
+		if (!IsTextureValid(tex)) return IntrinsicResult::Null;
+		return IntrinsicResult(TextureToValue(tex));
 	};
 	raylibModule.SetValue("LoadTexture", i->GetFunc());
 
@@ -1285,72 +1144,10 @@ static void AddRTextMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-			printf("LoadFont: Started fetch ID %ld for %s\n", fetchId, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				printf("LoadFont: Fetch ID %ld not found!\n", fetchId);
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-			printf("LoadFont: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
-
-			if (data.status == 200) {
-				// Success - get file extension and load font from memory
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".ttf";
-
-				printf("LoadFont: url=%s, ext=%s\n", url, ext);
-
-				// For BDF (bitmap) fonts, use 0 to load at native size
-				// For scalable fonts (TTF/OTF), use 32 as default
-				int fontSize = (strcmp(ext, ".bdf") == 0) ? 0 : 32;
-
-				printf("LoadFont: Loading with fontSize=%d, numBytes=%d\n", fontSize, (int)fetch->numBytes);
-				Font font = LoadFontFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes, fontSize, nullptr, 0);
-				printf("LoadFont: After load - baseSize=%d, glyphCount=%d, texture.id=%d\n",
-				       font.baseSize, font.glyphCount, font.texture.id);
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(FontToValue(font));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		Font font = LoadFont(path.c_str());
+		if (!IsFontValid(font)) return IntrinsicResult::Null;
+		return IntrinsicResult(FontToValue(font));
 	};
 	raylibModule.SetValue("LoadFont", i->GetFunc());
 
@@ -1360,65 +1157,12 @@ static void AddRTextMethods(ValueDict raylibModule) {
 	i->AddParam("codepoints", Value::null);
 	i->AddParam("codepointCount", Value::zero);
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-			printf("LoadFontEx: Started fetch ID %ld for %s\n", fetchId, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				printf("LoadFontEx: Fetch ID %ld not found!\n", fetchId);
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-			printf("LoadFontEx: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
-
-			if (data.status == 200) {
-				// Success - get file extension and load font from memory
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".ttf";
-
-				int fontSize = context->GetVar(String("fontSize")).IntValue();
-				// For now, ignore codepoints parameter and load all
-				Font font = LoadFontFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes, fontSize, nullptr, 0);
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(FontToValue(font));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		int fontSize = context->GetVar(String("fontSize")).IntValue();
+		// For now, ignore codepoints parameter and load all
+		Font font = LoadFontEx(path.c_str(), fontSize, nullptr, 0);
+		if (!IsFontValid(font)) return IntrinsicResult::Null;
+		return IntrinsicResult(FontToValue(font));
 	};
 	raylibModule.SetValue("LoadFontEx", i->GetFunc());
 
@@ -1639,63 +1383,10 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-			printf("LoadWave: Started fetch ID %ld for %s\n", fetchId, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				printf("LoadWave: Fetch ID %ld not found!\n", fetchId);
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-			printf("LoadWave: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
-
-			if (data.status == 200) {
-				// Success - get file extension and load wave from memory
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".wav";
-
-				Wave wave = LoadWaveFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(WaveToValue(wave));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		Wave wave = LoadWave(path.c_str());
+		if (!IsWaveValid(wave)) return IntrinsicResult::Null;
+		return IntrinsicResult(WaveToValue(wave));
 	};
 	raylibModule.SetValue("LoadWave", i->GetFunc());
 
@@ -1715,11 +1406,9 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	i->AddParam("wave");
 	i->code = INTRINSIC_LAMBDA {
 		Wave wave = ValueToWave(context->GetVar(String("wave")));
-		// IsWaveReady doesn't exist in Raylib, check if data pointer is valid
-		bool isReady = (wave.data != NULL && wave.frameCount > 0);
-		return IntrinsicResult(isReady);
+		return IntrinsicResult(IsWaveValid(wave));
 	};
-	raylibModule.SetValue("IsWaveReady", i->GetFunc());
+	raylibModule.SetValue("IsWaveValid", i->GetFunc());
 
 	i = Intrinsic::Create("");
 	i->AddParam("wave");
@@ -1781,63 +1470,10 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-			printf("LoadMusicStream: Started fetch ID %ld for %s\n", fetchId, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				printf("LoadMusicStream: Fetch ID %ld not found!\n", fetchId);
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-			printf("LoadMusicStream: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
-
-			if (data.status == 200) {
-				// Success - get file extension and load music from memory
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".ogg";
-
-				Music music = LoadMusicStreamFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(MusicToValue(music));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		Music music = LoadMusicStream(path.c_str());
+		if (!IsMusicValid(music)) return IntrinsicResult::Null;
+		return IntrinsicResult(MusicToValue(music));
 	};
 	raylibModule.SetValue("LoadMusicStream", i->GetFunc());
 
@@ -1857,11 +1493,9 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	i->AddParam("music");
 	i->code = INTRINSIC_LAMBDA {
 		Music music = ValueToMusic(context->GetVar(String("music")));
-		// IsMusicReady doesn't exist in Raylib, check if frameCount is valid
-		bool isReady = (music.frameCount > 0);
-		return IntrinsicResult(isReady);
+		return IntrinsicResult(IsMusicValid(music));
 	};
-	raylibModule.SetValue("IsMusicReady", i->GetFunc());
+	raylibModule.SetValue("IsMusicValid", i->GetFunc());
 
 	i = Intrinsic::Create("");
 	i->AddParam("music");
@@ -1999,65 +1633,10 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		if (partialResult.Done()) {
-			// First call - start the async fetch
-			String path = context->GetVar(String("fileName")).ToString();
-
-			// Create a new fetch ID and entry
-			long fetchId = nextFetchId++;
-			FetchData& data = activeFetches[fetchId];
-
-			emscripten_fetch_attr_t attr;
-			emscripten_fetch_attr_init(&attr);
-			strcpy(attr.requestMethod, "GET");
-			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
-			attr.onsuccess = fetch_completed;
-			attr.onerror = fetch_completed;
-
-			data.fetch = emscripten_fetch(&attr, path.c_str());
-			printf("LoadSound: Started fetch ID %ld for %s\n", fetchId, path.c_str());
-
-			// Return the fetch ID as partial result
-			return IntrinsicResult(Value((double)fetchId), false);
-		} else {
-			// Subsequent calls - check if fetch is complete
-			long fetchId = (long)partialResult.Result().DoubleValue();
-			auto it = activeFetches.find(fetchId);
-			if (it == activeFetches.end()) {
-				printf("LoadSound: Fetch ID %ld not found!\n", fetchId);
-				return IntrinsicResult::Null;
-			}
-
-			FetchData& data = it->second;
-
-			if (!data.completed) {
-				// Still loading
-				return partialResult;
-			}
-
-			// Fetch is complete
-			emscripten_fetch_t* fetch = data.fetch;
-			printf("LoadSound: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
-
-			if (data.status == 200) {
-				// Success - first load wave, then convert to sound
-				const char* url = fetch->url;
-				const char* ext = strrchr(url, '.');
-				if (ext == nullptr) ext = ".wav";
-
-				Wave wave = LoadWaveFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
-				Sound sound = LoadSoundFromWave(wave);
-				UnloadWave(wave);  // Clean up the wave
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult(SoundToValue(sound));
-			} else {
-				// Error
-				emscripten_fetch_close(fetch);
-				activeFetches.erase(it);
-				return IntrinsicResult::Null;
-			}
-		}
+		String path = context->GetVar(String("fileName")).ToString();
+		Sound sound = LoadSound(path.c_str());
+		if (!IsSoundValid(sound)) return IntrinsicResult::Null;
+		return IntrinsicResult(SoundToValue(sound));
 	};
 	raylibModule.SetValue("LoadSound", i->GetFunc());
 
@@ -2083,11 +1662,9 @@ static void AddRAudioMethods(ValueDict raylibModule) {
 	i->AddParam("sound");
 	i->code = INTRINSIC_LAMBDA {
 		Sound sound = ValueToSound(context->GetVar(String("sound")));
-		// IsSoundReady doesn't exist in Raylib, check if frameCount is valid
-		bool isReady = (sound.frameCount > 0);
-		return IntrinsicResult(isReady);
+		return IntrinsicResult(IsSoundValid(sound));
 	};
-	raylibModule.SetValue("IsSoundReady", i->GetFunc());
+	raylibModule.SetValue("IsSoundValid", i->GetFunc());
 
 	i = Intrinsic::Create("");
 	i->AddParam("sound");
@@ -3229,6 +2806,18 @@ static void AddRCoreMethods(ValueDict raylibModule) {
 		return IntrinsicResult(IsCursorOnScreen());
 	};
 	raylibModule.SetValue("IsCursorOnScreen", i->GetFunc());
+
+	// Load text files
+	i = Intrinsic::Create("");
+	i->AddParam("fileName");
+	i->code = INTRINSIC_LAMBDA {
+		const char *fileName = context->GetVar("fileName").GetString().c_str();
+		char *text = LoadFileText(fileName);
+		String ret(text);
+		UnloadFileText(text);
+		return IntrinsicResult(ret);
+	};
+	raylibModule.SetValue("LoadFileText", i->GetFunc());
 }
 
 static void AddConstants(ValueDict raylibModule) {
