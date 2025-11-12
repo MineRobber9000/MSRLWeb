@@ -82,6 +82,7 @@ static ValueDict FontClass() {
 	static ValueDict map;
 	if (map.Count() == 0) {
 		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("texture"), Value::null);
 		map.SetValue(String("baseSize"), Value::zero);
 		map.SetValue(String("glyphCount"), Value::zero);
 		map.SetValue(String("glyphPadding"), Value::zero);
@@ -212,6 +213,7 @@ static Value FontToValue(Font font) {
 	ValueDict map;
 	map.SetValue(Value::magicIsA, FontClass());
 	map.SetValue(String("_handle"), Value((long)fontPtr));
+	map.SetValue(String("texture"), TextureToValue(font.texture));
 	map.SetValue(String("baseSize"), Value(font.baseSize));
 	map.SetValue(String("glyphCount"), Value(font.glyphCount));
 	map.SetValue(String("glyphPadding"), Value(font.glyphPadding));
