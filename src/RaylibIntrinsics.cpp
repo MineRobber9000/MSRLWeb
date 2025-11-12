@@ -9,6 +9,7 @@
 #include "raylib.h"
 #include "MiniscriptInterpreter.h"
 #include "MiniscriptTypes.h"
+#include <emscripten.h>
 #include <emscripten/fetch.h>
 #include <math.h>
 #include <string.h>
@@ -52,6 +53,7 @@ static ValueDict FontClass() {
 	static ValueDict map;
 	if (map.Count() == 0) {
 		map.SetValue(String("_handle"), Value::zero);
+		map.SetValue(String("texture"), Value::null);
 		map.SetValue(String("baseSize"), Value::zero);
 		map.SetValue(String("glyphCount"), Value::zero);
 		map.SetValue(String("glyphPadding"), Value::zero);
@@ -182,6 +184,7 @@ static Value FontToValue(Font font) {
 	ValueDict map;
 	map.SetValue(Value::magicIsA, FontClass());
 	map.SetValue(String("_handle"), Value((long)fontPtr));
+	map.SetValue(String("texture"), TextureToValue(font.texture));
 	map.SetValue(String("baseSize"), Value(font.baseSize));
 	map.SetValue(String("glyphCount"), Value(font.glyphCount));
 	map.SetValue(String("glyphPadding"), Value(font.glyphPadding));
@@ -1144,10 +1147,93 @@ static void AddRTextMethods(ValueDict raylibModule) {
 	i = Intrinsic::Create("");
 	i->AddParam("fileName");
 	i->code = INTRINSIC_LAMBDA {
-		String path = context->GetVar(String("fileName")).ToString();
-		Font font = LoadFont(path.c_str());
-		if (!IsFontValid(font)) return IntrinsicResult::Null;
-		return IntrinsicResult(FontToValue(font));
+		if (partialResult.Done()) {
+			// First call - start the async fetch
+			String path = context->GetVar(String("fileName")).ToString();
+
+			// Create a new fetch ID and entry
+			long fetchId = nextFetchId++;
+			FetchData& data = activeFetches[fetchId];
+
+			emscripten_fetch_attr_t attr;
+			emscripten_fetch_attr_init(&attr);
+			strcpy(attr.requestMethod, "GET");
+			attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE;
+			attr.onsuccess = fetch_completed;
+			attr.onerror = fetch_completed;
+
+			data.fetch = emscripten_fetch(&attr, path.c_str());
+			printf("LoadFont: Started fetch ID %ld for %s\n", fetchId, path.c_str());
+
+			// Return the fetch ID as partial result
+			return IntrinsicResult(Value((double)fetchId), false);
+		} else {
+			// Subsequent calls - check if fetch is complete
+			long fetchId = (long)partialResult.Result().DoubleValue();
+			auto it = activeFetches.find(fetchId);
+			if (it == activeFetches.end()) {
+				printf("LoadFont: Fetch ID %ld not found!\n", fetchId);
+				return IntrinsicResult::Null;
+			}
+
+			FetchData& data = it->second;
+
+			if (!data.completed) {
+				// Still loading
+				return partialResult;
+			}
+
+			// Fetch is complete
+			emscripten_fetch_t* fetch = data.fetch;
+			printf("LoadFont: Fetch ID %ld complete, status=%d for %s\n", fetchId, data.status, fetch->url);
+
+			if (data.status == 200) {
+				// Success - get file extension and load font from memory
+				const char* url = fetch->url;
+				const char* ext = strrchr(url, '.');
+				if (ext == nullptr) ext = ".ttf";
+
+				printf("LoadFont: url=%s, ext=%s\n", url, ext);
+
+				Font font = {0};
+				if (IsFileExtension(fetch->url, ".ttf;.otf;.bdf")) {
+					// For BDF (bitmap) fonts, use 0 to load at native size
+					// For scalable fonts (TTF/OTF), use 32 as default
+					int fontSize = (strcmp(ext, ".bdf") == 0) ? 0 : 32;
+
+					printf("LoadFont: Loading with fontSize=%d, numBytes=%d\n", fontSize, (int)fetch->numBytes);
+					font = LoadFontFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes, fontSize, nullptr, 0);
+				} else if (strcmp(ext, ".bmf")==0) {
+					printf("LoadFont: Can't load BMFont font files\n");
+				} else {
+					Image image = LoadImageFromMemory(ext, (const unsigned char*)fetch->data, (int)fetch->numBytes);
+					if (image.data==nullptr) {
+						printf("LoadFont: font failed to load\n");
+					} else {
+						printf("LoadFont: loading XNA-style image font\n");
+						font = LoadFontFromImage(image, MAGENTA, 32); // 32 = <SPACE>
+					}
+					UnloadImage(image);
+				}
+				// raylib LoadFont() does this for us, but we can't use that, so we must do it ourselves
+				if (font.texture.id) {
+					SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+					printf("LoadFont: After load - baseSize=%d, glyphCount=%d, texture.id=%d\n",
+					       font.baseSize, font.glyphCount, font.texture.id);
+				} else {
+					printf("LoadFont: load failed, returning default font");
+					font = GetFontDefault();
+				}
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult(FontToValue(font));
+			} else {
+				// Error
+				emscripten_fetch_close(fetch);
+				activeFetches.erase(it);
+				return IntrinsicResult::Null;
+			}
+		}
 	};
 	raylibModule.SetValue("LoadFont", i->GetFunc());
 
@@ -2490,6 +2576,37 @@ static void AddRShapesMethods(ValueDict raylibModule) {
 // rcore methods
 //--------------------------------------------------------------------------------
 
+// Helper: Set window title
+EM_JS(void, _SetWindowTitle, (const char *title), {
+	const _title = UTF8ToString(title);
+	document.title = _title;
+	document.querySelector("h1").textContent = _title;
+});
+
+// Helper: Set window icon
+// We need to free the buffer after we're done with it so this function won't
+// return until after it's done.
+EM_ASYNC_JS(void, _SetWindowIcon, (unsigned char *data, long size), {
+	await new Promise((resolve, reject)=>{
+		const _data = new Uint8Array(HEAP8.buffer, data, size);
+		const blob = new Blob([_data], {type:"image/png"});
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			const dataURL = reader.result;
+			let link = document.querySelector('link[rel="icon"]');
+			if (link===null) {
+				link = document.createElement("link");
+				link.setAttribute("rel", "icon");
+				document.head.appendChild(link);
+			}
+			link.href = dataURL;
+			resolve();
+		};
+		reader.onerror = reject;
+		reader.readAsDataURL(blob);
+	});
+});
+
 static void AddRCoreMethods(ValueDict raylibModule) {
 	Intrinsic *i;
 
@@ -2807,17 +2924,27 @@ static void AddRCoreMethods(ValueDict raylibModule) {
 	};
 	raylibModule.SetValue("IsCursorOnScreen", i->GetFunc());
 
-	// Load text files
+	// Set window title/icon
 	i = Intrinsic::Create("");
-	i->AddParam("fileName");
+	i->AddParam("caption", "MSRLWeb - MiniScript + Raylib");
 	i->code = INTRINSIC_LAMBDA {
-		const char *fileName = context->GetVar("fileName").GetString().c_str();
-		char *text = LoadFileText(fileName);
-		String ret(text);
-		UnloadFileText(text);
-		return IntrinsicResult(ret);
+		String caption = context->GetVar(String("caption")).GetString();
+		_SetWindowTitle(caption.c_str());
+		return IntrinsicResult::Null;
 	};
-	raylibModule.SetValue("LoadFileText", i->GetFunc());
+	raylibModule.SetValue("SetWindowTitle", i->GetFunc());
+
+	i = Intrinsic::Create("");
+	i->AddParam("image");
+	i->code = INTRINSIC_LAMBDA {
+		Image image = ValueToImage(context->GetVar(String("image")));
+		int size;
+		unsigned char *data = ExportImageToMemory(image, ".png", &size);
+		_SetWindowIcon(data, size);
+		free(data);
+		return IntrinsicResult::Null;
+	};
+	raylibModule.SetValue("SetWindowIcon", i->GetFunc());
 }
 
 static void AddConstants(ValueDict raylibModule) {
