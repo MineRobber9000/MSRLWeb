@@ -699,38 +699,6 @@ void AddRShapesMethods(ValueDict raylibModule) {
 	};
 	raylibModule.SetValue("DrawCircleSectorLines", i->GetFunc());
 
-	// Additional ellipse drawing
-
-	i = Intrinsic::Create("");
-	i->AddParam("center");
-	i->AddParam("radiusH", Value(10.0));
-	i->AddParam("radiusV", Value(5.0));
-	i->AddParam("color", ColorToValue(WHITE));
-	i->code = INTRINSIC_LAMBDA {
-		Vector2 center = ValueToVector2(context->GetVar(String("center")));
-		float radiusH = context->GetVar(String("radiusH")).FloatValue();
-		float radiusV = context->GetVar(String("radiusV")).FloatValue();
-		Color color = ValueToColor(context->GetVar(String("color")));
-		DrawEllipseV(center, radiusH, radiusV, color);
-		return IntrinsicResult::Null;
-	};
-	raylibModule.SetValue("DrawEllipseV", i->GetFunc());
-
-	i = Intrinsic::Create("");
-	i->AddParam("center");
-	i->AddParam("radiusH", Value(10.0));
-	i->AddParam("radiusV", Value(5.0));
-	i->AddParam("color", ColorToValue(WHITE));
-	i->code = INTRINSIC_LAMBDA {
-		Vector2 center = ValueToVector2(context->GetVar(String("center")));
-		float radiusH = context->GetVar(String("radiusH")).FloatValue();
-		float radiusV = context->GetVar(String("radiusV")).FloatValue();
-		Color color = ValueToColor(context->GetVar(String("color")));
-		DrawEllipseLinesV(center, radiusH, radiusV, color);
-		return IntrinsicResult::Null;
-	};
-	raylibModule.SetValue("DrawEllipseLinesV", i->GetFunc());
-
 	// Additional line drawing
 
 	i = Intrinsic::Create("");
