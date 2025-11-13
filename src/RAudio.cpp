@@ -555,24 +555,40 @@ void AddRAudioMethods(ValueDict raylibModule) {
 	i->AddParam("data");
 	i->code = INTRINSIC_LAMBDA {
 		AudioStream stream = ValueToAudioStream(context->GetVar(String("stream")));
-		ValueList data = context->GetVar(String("data")).GetList();
+		Value _data = context->GetVar(String("data"));
 
+		if (_data.type==ValueType::List) {
+			ValueList data = _data.GetList();
 #define PROCESS_DATA(TYPE, VALUE) \
-		TYPE *buffer = new TYPE[data.Count()]; \
-		for (long i=0;i<data.Count();++i) { \
-			buffer[i] = static_cast<TYPE>(data.Item(i).VALUE()); \
-		}; \
-		UpdateAudioStream(stream, buffer, data.Count());
+			TYPE *buffer = new TYPE[data.Count()]; \
+			for (long i=0;i<data.Count();++i) { \
+				buffer[i] = static_cast<TYPE>(data.Item(i).VALUE()); \
+			}; \
+			UpdateAudioStream(stream, buffer, data.Count());
 
-		if (stream.sampleSize==8) {
-			PROCESS_DATA(unsigned char, IntValue)
-		} else if (stream.sampleSize==16) {
-			PROCESS_DATA(signed short, IntValue)
-		} else {
-			PROCESS_DATA(float, FloatValue)
-		}
+			if (stream.sampleSize==8) {
+				PROCESS_DATA(unsigned char, IntValue)
+			} else if (stream.sampleSize==16) {
+				PROCESS_DATA(signed short, IntValue)
+			} else {
+				PROCESS_DATA(float, FloatValue)
+			}
 
 #undef PROCESS_DATA
+		} else if (_data.IsA(RawDataClass(), context->vm)) {
+			BinaryData *data = ValueToRawData(_data);
+#define PROCESS_DATA(TYPE, SHIFT) UpdateAudioStream(stream, reinterpret_cast<TYPE *>(data->bytes), data->length >> SHIFT)
+
+			if (stream.sampleSize==8) {
+				PROCESS_DATA(unsigned char, 0);
+			} else if (stream.sampleSize==16) {
+				PROCESS_DATA(signed short, 1);
+			} else {
+				PROCESS_DATA(float, 2);
+			}
+
+#undef PROCESS_DATA
+		}
 
 		return IntrinsicResult::Null;
 	};
