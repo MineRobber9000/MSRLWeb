@@ -52,6 +52,16 @@ while i < samples.len
 end while
 pew = makeSound(samples)
 
+// white: just 3 seconds of white noise (for engine sounds, etc.)
+duration = 3
+i = 0
+samples = [0] * sampleRate * duration
+while i < samples.len	
+	samples[i] = 255 * rnd	// random, white noise
+	i += 1
+end while
+white = makeSound(samples)
+
 // hit: a quick white noise sound, like a small impact
 duration = 1
 i = 0
@@ -64,6 +74,7 @@ while i < samples.len
 end while
 hit = makeSound(samples)
 
+// boom: a longer (slower-fading) white noise sound, good for explosions
 duration = 2
 i = 0
 amp = 127
@@ -75,7 +86,9 @@ while i < samples.len
 end while
 boom = makeSound(samples)
 
-sounds = [null, wooble, boop, pew, hit, boom]
+
+
+sounds = [null, wooble, boop, pew, white, hit, boom]
 
 run = function
 	x = 100; y = 100

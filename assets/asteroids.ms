@@ -5,12 +5,9 @@ import "sounds"
 
 spriteSheetTex = raylib.LoadTexture("assets/Asteroids-2X.png")
 
-print "Loading scoreFont..."
 fontImage = raylib.LoadImage("assets/digits.png")
 scoreFont = raylib.LoadFontFromImage(fontImage, [255, 0, 255], "0")
 raylib.UnloadImage(fontImage)
-print "scoreFont isFontValid: " + raylib.IsFontValid(scoreFont)
-print scoreFont
 
 sprites = []
 
@@ -61,8 +58,11 @@ pew.sound = sounds.pew
 bipBoop = [new Sound, new Sound]
 hit = new Sound
 hit.sound = sounds.boom
-engineNoise = new Sound
 ufoSound = new Sound
+
+engineNoise = sounds.white
+raylib.SetSoundPitch engineNoise, 0.25
+raylib.SetSoundVolume engineNoise, 0.2
 
 //----------------------------------------------------------------------
 
@@ -120,6 +120,13 @@ GameSprite.overlaps = function(other)
 	return (self.x - other.x)^2 + (self.y - other.y)^2 < r^2
 end function
 
+GameSprite.overlapsRect = function(rect)
+	return rect[0] <= self.x + self.radius and
+	       rect[0] + rect[2] >= self.x - self.radius and
+	       rect[1] <= self.y + self.radius and
+	       rect[1] + rect[3] >= self.y - self.radius
+end function
+
 GameSprite.contains = function(point)
 	// For the sake of this demo, we'll assume all sprites are roughly
 	// circular, so we can just do a distance test.
@@ -163,7 +170,28 @@ ship.init = function
 	self.reset
 end function
 
+ship.destroy = function
+	super.destroy
+	raylib.StopSound engineNoise
+	hit.play 1, (self.x - 480)/480, 0.3
+	makeDebris self
+	// Infinite lives for this demo!    outer.lives = lives - 1
+	outer.respawnTime = time + 3
+end function
+
+ship.respawn = function
+	if not safeToRespawn then return // not yet!
+	self.x = 480
+	self.y = 320
+	self.rotation = 0
+	self.init
+	outer.respawnTime = 0
+end function
+ship.respawnArea = [480-150, 320-150, 300, 300]
+
 ship.update = function(dt)
+	if self.destroyed then return
+	
 	// turn
 	turn = key.axis("Horizontal")
 	self.rotation = self.rotation + turn * self.turnRate * dt
@@ -177,12 +205,15 @@ ship.update = function(dt)
 	self.v.y = self.v.y + sin(radians) * thrust * self.acceleration * dt
 	if thrust > 0 and not self.thrusting then
 		self.srcRect = self.srcRectEngineOn
-		engineNoise.play 0.1
 		self.thrusting = true
 	else if self.thrusting and thrust == 0 then
 		self.srcRect = self.srcRectEngineOff
-		engineNoise.stop
 		self.thrusting = false
+	end if
+	if self.thrusting then
+		if not raylib.IsSoundPlaying(engineNoise) then raylib.PlaySound engineNoise
+	else if raylib.IsSoundPlaying(engineNoise) then
+		raylib.StopSound engineNoise
 	end if
 	
 	// fire bullets
@@ -322,6 +353,13 @@ end function
 
 //----------------------------------------------------------------------
 
+safeToRespawn = function
+	for sp in sprites
+		if sp isa Rock and sp.overlapsRect(ship.respawnArea) then return false
+	end for
+	return true
+end function
+
 makeDebris = function(source)
 	for i in range(10)
 		d = new TimedSprite
@@ -333,16 +371,17 @@ makeDebris = function(source)
 	end for
 end function
 
-//----------------------------------------------------------------------
-
-//----------------------------------------------------------------------
-
+respawnTime = time
+lives = 1
 
 init = function
 	ship.init
 	for i in range(0,7)
 		Rock.Make
 	end for
+	ship.destroyed = true
+	sprites.removeVal ship
+	outer.respawnTime = time + 1
 end function
 
 update = function(dt)
@@ -350,12 +389,12 @@ update = function(dt)
 	for sp in sprites
 		sp.update dt
 	end for
+	if ship.destroyed and respawnTime and time > respawnTime then
+		if lives > 0 then ship.respawn
+	end if
 end function
 
 render = function
-	raylib.BeginDrawing
-	raylib.ClearBackground raylib.BLACK
-
 	for sp in sprites
 		sp.draw
 	end for
@@ -364,14 +403,16 @@ render = function
 	raylib.DrawTextEx scoreFont, scoreStr, [780, 0], scoreFont.baseSize, 2, color.lime
 	
 	raylib.DrawFPS
-	raylib.EndDrawing
 end function
 
 run = function
 	init
 	while true
+		raylib.BeginDrawing
+		raylib.ClearBackground raylib.BLACK
 		update
 		render
+		raylib.EndDrawing
 		if raylib.IsKeyPressed(raylib.KEY_ESCAPE) or raylib.IsKeyPressed(raylib.KEY_Q) then break
 		yield
 	end while	

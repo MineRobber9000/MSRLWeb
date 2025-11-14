@@ -156,6 +156,7 @@ end function
 buttons.push btn
 y += dy
 
+
 // Main loop
 while true
 	// update stuff
@@ -171,6 +172,6 @@ while true
 		btn.render
 	end for
 	rl.DrawFPS
-	rl.DrawText str(rl.IsMouseButtonDown), 10, 30, 20, rl.BLUE
+
 	rl.EndDrawing
 end while
